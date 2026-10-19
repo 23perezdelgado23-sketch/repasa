@@ -95,7 +95,9 @@ function aviso(t) {
 }
 
 const cabecera = (titulo, atras = "#/", extra = "") =>
-  `<header class="cab">${atras ? `<a class="atras" href="${atras}" aria-label="Volver">‹</a>` : ""}<h1>${esc(titulo)}</h1>${extra}</header>`;
+  `<header class="cab">${atras === "atras" ? `<button class="atras" data-a="volver" aria-label="Volver">‹</button>` : atras ? `<a class="atras" href="${atras}" aria-label="Volver">‹</a>` : ""}<h1>${esc(titulo)}</h1>${extra}</header>`;
+// Botón «?» que abre la guía en el apartado de esa pantalla
+const ayudaBtn = (k) => `<a class="icono-btn ayuda-btn" href="#/ayuda/${k}" aria-label="Cómo funciona">?</a>`;
 
 // ---------- Racha y logros ----------
 const leerJSON = (k, defecto) => { try { return JSON.parse(ls.get(k)) ?? defecto; } catch { return defecto; } };
@@ -181,6 +183,7 @@ async function pintar() {
     if (ruta === "combinar") return await pintarCombinar();
     if (ruta === "logros") return pintarLogros();
     if (ruta === "guia") return pintarGuia(+a || 0);
+    if (ruta === "ayuda") return pintarAyuda(a);
     return await pintarInicio();
   } catch (e) {
     app.innerHTML = cabecera("Algo ha fallado") + `<div class="caja aviso">${esc(e.message || e)}</div><a class="btn" href="#/">Volver al inicio</a>`;
@@ -214,7 +217,7 @@ async function pintarInicio() {
   const asignaturas = [...new Set([...conTema.map((t) => t.resumen.asignatura), ...ASIGNATURAS])];
   app.innerHTML = `
     <header class="cab inicio"><div><div class="hola">${nombre ? `Hola, ${esc(nombre)} ${esc(ls.get("repasa:emoji") || "👋")}` : "Hola 👋"}</div><h1>Repasa</h1></div>
-      <div class="cab-der"><a class="racha ${r ? "" : "apagada"}" href="#/logros" aria-label="Racha y logros">🔥 ${r}</a><a class="icono-btn" href="#/ajustes" aria-label="Ajustes">⚙️</a></div></header>
+      <div class="cab-der"><a class="racha ${r ? "" : "apagada"}" href="#/logros" aria-label="Racha y logros">🔥 ${r}</a><a class="icono-btn ayuda-btn" href="#/ayuda" aria-label="Cómo funciona">?</a><a class="icono-btn" href="#/ajustes" aria-label="Ajustes">⚙️</a></div></header>
     ${!IA.tieneClave() ? `<a class="caja aviso enlace" href="#/ajustes"><b>Falta un paso:</b> poner la clave de la IA en Ajustes (lo hace Eduardo una vez).</a>` : ""}
     ${!nombre ? `<form class="caja" data-f="nombre"><label class="etq" for="nom">¿Cómo te llamas?</label><div class="fila"><input id="nom" autocomplete="given-name" placeholder="Tu nombre"><button class="btn" type="submit">Guardar</button></div></form>` : ""}
     ${!instalada && !ls.get("repasa:sinInstalar") ? `<div class="caja suave"><b>Ponla como una app:</b> en Safari toca <b>Compartir</b> (el cuadrado con la flecha) → <b>Añadir a pantalla de inicio</b>. Así tus temas quedan guardados para siempre. <button class="enlace-btn" data-a="cerrar-instalar">Vale</button></div>` : ""}
@@ -270,7 +273,7 @@ function pintarNuevo(traducir, examenId) {
   if (!borrador || borrador.traducir !== traducir) borrador = { traducir, fotos: [], objetivo: traducir ? "traducir" : "examen", idioma: "Español", fecha: "", notas: "" };
   const b = borrador;
   app.innerHTML = `
-    ${cabecera(traducir ? "Traducir con fotos" : "Nuevo tema")}
+    ${cabecera(traducir ? "Traducir con fotos" : "Nuevo tema", "#/", ayudaBtn(traducir ? "traducir" : "nuevo"))}
     ${b.para ? `<div class="caja suave fila-para"><span>📅 Para el examen de <b>${esc(b.para)}</b></span><button class="enlace-btn" data-a="soltar-examen">Quitar</button></div>` : ""}
     ${b.deLibro ? `<div class="caja suave fila-para"><span>📚 ${esc(b.deLibro)}</span></div>` : ""}
     <div class="caja">
@@ -476,7 +479,7 @@ async function pintarTema(id, pest) {
   // Apunta lo que ya ha abierto (para el «Te toca ahora»)
   if (!t.vistos?.[pest]) (t.vistos ||= {})[pest] = true, Almacen.guardar(t);
   const sec = SECCIONES[pest];
-  app.innerHTML = `${cabecera(`${sec.icono} ${sec.nombre}`, `#/tema/${t.id}`)}
+  app.innerHTML = `${cabecera(`${sec.icono} ${sec.nombre}`, `#/tema/${t.id}`, ayudaBtn(pest))}
     <div class="sub-cab">${esc(r.titulo)}</div>
     <section id="zona"></section>`;
   PANELES[pest]($("#zona"), t);
@@ -514,7 +517,7 @@ function pintarMenuTema(t, hay) {
     const s = SECCIONES[k];
     return `<a class="seccion ${k === sig ? "sugerida" : ""}" href="#/tema/${t.id}/${k}"><span class="emoji">${s.icono}</span><span><b>${s.nombre}</b><small>${estado[k] || s.desc}</small></span></a>`;
   };
-  app.innerHTML = `${cabecera(r.titulo)}
+  app.innerHTML = `${cabecera(r.titulo, "#/", ayudaBtn("menu"))}
     <div class="sub-cab">${esc(r.asignatura)}${t.fechaExamen ? ` · examen ${cuandoEs(t.fechaExamen)}` : ""}${r.idioma_original && r.traduccion.length ? ` · de ${esc(r.idioma_original)} a ${esc(t.idioma)}` : ""}</div>
     <div class="caja dominio"><div class="fila-dominio"><b>Lo dominas al ${dominio(t)}%</b></div>${barra(dominio(t))}</div>
     <a class="caja enlace toca" href="#/tema/${t.id}/${sig}"><span class="emoji">👉</span><span><small>Te toca ahora</small><b>${esc(texto)}</b></span><span class="flecha">›</span></a>
@@ -789,7 +792,7 @@ async function pintarRepaso() {
   const temas = (await Almacen.todos()).filter((t) => t.resumen);
   const cola = temas.flatMap(tarjetasPendientes);
   temaVisible = null;
-  app.innerHTML = `${cabecera("Repaso de hoy")}<section id="zona"></section>`;
+  app.innerHTML = `${cabecera("Repaso de hoy", "#/", ayudaBtn("repaso"))}<section id="zona"></section>`;
   if (!cola.length) {
     $("#zona").innerHTML = `<div class="caja centro"><div class="emoji">🌟</div><h2>Todo repasado por hoy</h2><p>Vuelve mañana.</p></div>`;
     return;
@@ -970,7 +973,7 @@ async function corregirFotoAccion(b) {
 function pintarCorregirSuelto() {
   temaVisible = null;
   const hist = leerJSON("repasa:correcciones", []);
-  app.innerHTML = `${cabecera("Corregir un ejercicio")}
+  app.innerHTML = `${cabecera("Corregir un ejercicio", "#/", ayudaBtn("corregir"))}
     <div class="caja"><p class="peq">Haz foto a un ejercicio, problema, redacción o respuesta que hayas hecho tú y te lo corrijo: nota, en qué fallas y cómo se hace bien. Si es de un tema que ya tienes, mejor desde el tema (pestaña Practicar), porque así me sé tu libro.</p>
       <div id="corrector">${htmlCorrector()}</div></div>
     ${hist.length ? `<h2 class="titulo-sec">Correcciones anteriores</h2>${hist.slice().reverse().map(htmlCorreccionFoto).join("")}` : ""}`;
@@ -1218,7 +1221,7 @@ async function pintarCombinar() {
   const temas = (await Almacen.todos()).filter((t) => t.resumen && t.objetivo !== "traducir" && !t.origen?.length).sort((a, b) => a.resumen.asignatura.localeCompare(b.resumen.asignatura));
   combinacion ||= { ids: [], objetivo: "examen", fecha: "", notas: "" };
   const c = combinacion;
-  app.innerHTML = `${cabecera("Juntar temas")}
+  app.innerHTML = `${cabecera("Juntar temas", "#/", ayudaBtn("juntar"))}
     <p class="intro">Para los exámenes en los que entran varios temas: elige cuáles y te preparo un solo material que los mezcla (resumen, esquema, test, preguntas, simulacro…).</p>
     ${temas.length < 2 ? `<div class="vacio">Necesitas al menos 2 temas creados para poder juntarlos.</div>` : `
     <div class="caja"><div class="etq">1. ¿Qué temas entran?</div>${temas.map((t) => `<label class="paso"><input type="checkbox" data-comb="${t.id}" ${c.ids.includes(t.id) ? "checked" : ""}><span><b>${esc(t.resumen.titulo)}</b><small class="bloque">${esc(t.resumen.asignatura)}</small></span></label>`).join("")}</div>
@@ -1247,7 +1250,7 @@ function paginasTexto(l) {
 
 async function pintarLibros() {
   const libros = (await Almacen.libros.todos()).sort((a, b) => (a.asignatura || "").localeCompare(b.asignatura || ""));
-  app.innerHTML = `${cabecera("Mis libros")}
+  app.innerHTML = `${cabecera("Mis libros", "#/", ayudaBtn("libros"))}
     <p class="intro">Guarda aquí las páginas de tus libros una sola vez. Luego, para estudiar, eliges «páginas 40 a 52» y listo, sin volver a hacer fotos.</p>
     ${libros.map((l) => `<a class="caja enlace libro-fila" href="#/libro/${l.id}">${l.portada ? `<img class="portada" src="${verFoto(l.portada)}" alt="">` : `<span class="emoji">📘</span>`}<span class="nombre-tema">${esc(l.titulo || "Libro")}<small>${esc([l.asignatura, l.curso].filter(Boolean).join(" · "))}</small><small>${l.paginas.length ? `Páginas: ${esc(paginasTexto(l) || "sin número")}` : "Aún sin páginas"}</small></span><span class="flecha">›</span></a>`).join("")}
     <div class="caja"><div class="etq">Añadir un libro</div><p class="peq">Haz una foto a la portada y lo reconozco.</p>
@@ -1281,7 +1284,7 @@ async function pintarLibro(id) {
   const primera = l.paginas.find((p) => p.num)?.num || "";
   let ultima = primera; // hasta donde llegan seguidas las páginas guardadas
   for (const p of l.paginas) if (p.num && p.num <= ultima + 1) ultima = Math.max(ultima, hastaPag(p));
-  app.innerHTML = `${cabecera(l.titulo, "#/libros", `<button class="icono-btn" data-a="editar-libro" aria-label="Cambiar nombre">✏️</button>`)}
+  app.innerHTML = `${cabecera(l.titulo, "#/libros", `<button class="icono-btn" data-a="editar-libro" aria-label="Cambiar nombre">✏️</button>${ayudaBtn("libros")}`)}
     <div class="sub-cab">${esc([l.asignatura, l.editorial, l.curso].filter(Boolean).join(" · "))}</div>
     ${l.paginas.length ? `<div class="caja destacada"><div class="etq">Estudiar unas páginas</div>
       <p class="peq">Tienes guardadas: ${esc(paginasTexto(l) || "páginas sin número")}</p>
@@ -1379,7 +1382,7 @@ function sonar() {
 
 function pintarConcentrar() {
   if (!foco) {
-    app.innerHTML = `${cabecera("Concentrarme")}
+    app.innerHTML = `${cabecera("Concentrarme", "#/", ayudaBtn("concentrar"))}
       <div class="caja"><p>Estudia a tope un rato y luego descansa. Es la forma de rendir más sin agotarte.</p>
         <ul><li>Pon el móvil en <b>No molestar</b> 🌙</li><li>Deja esta pantalla abierta: te aviso con un sonido</li><li>Ten delante lo que vas a estudiar</li></ul></div>
       <div class="opciones">
@@ -1439,13 +1442,32 @@ async function empezarFoco(estudio, descanso) {
   pintarConcentrar();
 }
 
+// ---------- Guía completa («Cómo funciona») ----------
+const htmlAyuda = (k, abierto) => {
+  const a = AYUDA[k];
+  return `<details class="caja ayuda" id="ay-${k}" ${abierto ? "open" : ""}><summary><span class="emoji">${a.icono}</span><b>${esc(a.titulo)}</b></summary>
+    <p>${md(a.que)}</p>
+    ${a.cuando ? `<p class="peq"><b>Cuándo:</b> ${md(a.cuando)}</p>` : ""}
+    <div class="etq">Cómo se hace</div>
+    <ol>${a.pasos.map((p) => `<li>${md(p)}</li>`).join("")}</ol>
+    ${a.truco ? `<p class="consejo">💡 ${md(a.truco)}</p>` : ""}
+  </details>`;
+};
+function pintarAyuda(k) {
+  app.innerHTML = `${cabecera("Cómo funciona", "atras")}
+    <p class="intro">Toca cada apartado para ver qué es y cómo se usa. En cada pantalla tienes también un botón <b>?</b> arriba a la derecha que te trae justo a su explicación.</p>
+    ${GRUPOS_AYUDA.map(([g, ks]) => `<h2 class="titulo-sec">${g}</h2>${ks.map((x) => htmlAyuda(x, x === k || (!k && x === "metodo"))).join("")}`).join("")}
+    <a class="btn sec ancho" href="#/guia">Ver otra vez la bienvenida</a>`;
+  if (k && AYUDA[k]) setTimeout(() => $(`#ay-${k}`)?.scrollIntoView({ block: "start" }), 60);
+}
+
 // ---------- Guía de bienvenida ----------
 const GUIA = [
   ["👋", "¡Bienvenida a Repasa!", "Es como tener un profe particular en el móvil. Haces fotos a tus apuntes y te lo preparo todo para que te lo sepas y apruebes."],
   ["📸", "1. Haz fotos", "Pulsa «Nuevo tema» y haz una foto a cada página (recta y con luz). Dime si es para un examen, un test o una presentación. En 1-3 minutos está listo: mientras, no cierres la app."],
   ["🪜", "2. Sigue los 3 pasos", "Cada tema tiene 3 pasos: Entiéndelo (resumen, esquema) → Apréndetelo (tarjetas, test) → Ponte a prueba (preguntas con nota, simulacro). Si no sabes qué hacer, pulsa «Te toca ahora»."],
   ["🔥", "3. Un poquito cada día", "Haz el «Repaso de hoy»: son 10 minutos y así no se te olvida nada. Usa «🎯 Concentrarme» para estudiar sin distracciones. Cada día que estudias suma a tu racha 🔥."],
-  ["💡", "Trucos", "Apunta cada examen en cuanto te lo digan y te aviso con tiempo. Guarda tus libros en «Mis libros» y luego solo eliges las páginas. Para inglés o francés, «Traducir con fotos». Y si algo te choca, compruébalo en el libro: la IA también se puede equivocar."],
+  ["❓", "Si te pierdes", "Arriba a la derecha de cada pantalla tienes un botón «?» que te explica esa parte paso a paso. Y en el inicio, el «?» abre la guía completa. Apunta cada examen en cuanto te lo digan y te aviso con tiempo. Guarda tus libros en «Mis libros» y luego solo eliges las páginas. Para inglés o francés, «Traducir con fotos». Y si algo te choca, compruébalo en el libro: la IA también se puede equivocar."],
 ];
 function pintarGuia(n) {
   const [icono, titulo, texto] = GUIA[n], ultima = n === GUIA.length - 1;
@@ -1460,7 +1482,7 @@ function pintarGuia(n) {
 // ---------- Logros ----------
 function pintarLogros() {
   const tengo = leerJSON("repasa:logros", []), s = leerJSON("repasa:stats", {}), r = racha();
-  app.innerHTML = `${cabecera("Mis logros")}
+  app.innerHTML = `${cabecera("Mis logros", "#/", ayudaBtn("racha"))}
     <div class="caja destacada centro"><div class="emoji">🔥</div><h2>${r} día${r === 1 ? "" : "s"} seguido${r === 1 ? "" : "s"}</h2><p class="peq">Cuenta cada día que repasas tarjetas, haces un test o te corrijo algo. ¡No la rompas!</p></div>
     <div class="logros">${LOGROS.map((l) => `<div class="logro ${tengo.includes(l.id) ? "" : "bloqueado"}"><span class="emoji">${l.icono}</span><b>${l.nombre}</b><small>${l.desc}</small></div>`).join("")}</div>
     <div class="caja"><div class="etq">Tus números</div><p>📸 ${s.temas || 0} temas · 🃏 ${s.tarjetas || 0} tarjetas · ✅ ${s.tests || 0} tests · ✍️ ${s.correcciones || 0} correcciones · ⏱️ ${s.simulacros || 0} simulacros · 🎙️ ${s.orales || 0} orales · 🎯 ${s.concentracion || 0} bloques de concentración</p></div>`;
@@ -1482,7 +1504,7 @@ function pintarAjustes() {
   const color = ls.get("repasa:color") || "violeta", emoji = ls.get("repasa:emoji") || "";
   const ultima = ls.get("repasa:ultimaCopia"), logros = leerJSON("repasa:logros", []).length;
   const abierta = !ls.get("repasa:pin") || zonaAbierta;
-  app.innerHTML = `${cabecera("Ajustes")}
+  app.innerHTML = `${cabecera("Ajustes", "#/", ayudaBtn("ajustes"))}
     <form class="caja" data-f="perfil">
       <label class="etq" for="aj-nombre">Tu nombre</label>
       <input id="aj-nombre" value="${esc(ls.get("repasa:nombre") || "")}" placeholder="Tu nombre">
@@ -1494,7 +1516,7 @@ function pintarAjustes() {
       <div class="colores">${Object.entries(COLORES).map(([k, v]) => `<button type="button" class="color-op ${k === color ? "activa" : ""}" style="background:${v}" data-a="color" data-c="${k}" aria-label="${k}"></button>`).join("")}</div>
       <button class="btn ancho" type="submit">Guardar</button>
     </form>
-    <a class="caja enlace" href="#/guia"><span class="emoji">❓</span><span><b>Cómo funciona la app</b><small>La guía de bienvenida otra vez</small></span><span class="flecha">›</span></a>
+    <a class="caja enlace" href="#/ayuda"><span class="emoji">❓</span><span><b>Cómo funciona la app</b><small>Cada apartado explicado paso a paso</small></span><span class="flecha">›</span></a>
     <a class="caja enlace" href="#/logros"><span class="emoji">🏅</span><span><b>Mis logros</b><small>${logros} de ${LOGROS.length} conseguidos · racha de ${racha()} días</small></span><span class="flecha">›</span></a>
     <div class="caja"><div class="etq">Recordatorio para estudiar</div>
       <p class="peq">Te pongo un aviso diario en el Calendario del móvil para que no se te olvide repasar.</p>
@@ -1591,6 +1613,7 @@ const ACCIONES = {
     ls.set("repasa:examenes", JSON.stringify(leerJSON("repasa:examenes", []).filter((x) => x.id !== b.dataset.id)));
     pintar();
   },
+  volver: () => (history.length > 1 ? history.back() : ir("#/")),
   "fin-guia": () => { ls.set("repasa:guiaVista", "1"); ir("#/"); },
   "cerrar-instalar": () => { ls.set("repasa:sinInstalar", "1"); pintar(); },
   objetivo: (b) => { borrador.objetivo = b.dataset.k; guardarCamposBorrador(); pintarNuevo(false); },

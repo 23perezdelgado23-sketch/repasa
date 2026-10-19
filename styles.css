@@ -408,6 +408,20 @@ small.bloque { display: block; color: var(--suave); font-weight: 400; }
 .foco-texto { color: var(--suave); max-width: 320px; }
 .foco-bloques { font-size: 0.9rem; color: var(--suave); }
 
+/* Guía completa */
+.ayuda-btn { font-weight: 800; font-size: 1.15rem; color: var(--acento); text-decoration: none; flex: none; }
+.cab .icono-btn { flex: none; }
+.ayuda { scroll-margin-top: 72px; }
+.ayuda summary { display: flex; align-items: center; gap: 12px; cursor: pointer; list-style: none; font-size: 1.05rem; }
+.ayuda summary::-webkit-details-marker { display: none; }
+.ayuda summary::after { content: "＋"; margin-left: auto; color: var(--suave); }
+.ayuda[open] summary::after { content: "－"; }
+.ayuda summary .emoji { font-size: 1.5rem; }
+.ayuda[open] summary { margin-bottom: 10px; }
+.ayuda ol { padding-left: 1.3em; margin: 0.3em 0 0.6em; }
+.ayuda ol li { margin: 0.45em 0; }
+button.atras { border: 0; color: var(--acento); cursor: pointer; font: inherit; font-size: 2rem; }
+
 /* Aviso flotante */
 .toast { position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 24px); transform: translateX(-50%); z-index: 30; background: var(--tinta); color: var(--fondo); padding: 12px 18px; border-radius: 14px; font-weight: 600; max-width: calc(100% - 32px); box-shadow: 0 8px 30px rgba(0, 0, 0, 0.25); transition: opacity 0.4s, transform 0.4s; }
 .toast.fuera { opacity: 0; transform: translate(-50%, 10px); }
