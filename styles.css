@@ -422,8 +422,11 @@ small.bloque { display: block; color: var(--suave); font-weight: 400; }
 .ayuda ol li { margin: 0.45em 0; }
 button.atras { border: 0; color: var(--acento); cursor: pointer; font: inherit; font-size: 2rem; }
 
+.caja.aviso-saldo { background: var(--mal-suave); border: 0; }
+.caja.aviso-saldo.poco { background: var(--reg-suave); }
+
 /* Aviso flotante */
-.toast { position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 24px); transform: translateX(-50%); z-index: 30; background: var(--tinta); color: var(--fondo); padding: 12px 18px; border-radius: 14px; font-weight: 600; max-width: calc(100% - 32px); box-shadow: 0 8px 30px rgba(0, 0, 0, 0.25); transition: opacity 0.4s, transform 0.4s; }
+.toast { pointer-events: none; position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 24px); transform: translateX(-50%); z-index: 30; background: var(--tinta); color: var(--fondo); padding: 12px 18px; border-radius: 14px; font-weight: 600; max-width: calc(100% - 32px); box-shadow: 0 8px 30px rgba(0, 0, 0, 0.25); transition: opacity 0.4s, transform 0.4s; }
 .toast.fuera { opacity: 0; transform: translate(-50%, 10px); }
 
 /* Imprimir / PDF */

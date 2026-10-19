@@ -210,6 +210,7 @@ async function pintarInicio() {
   ].sort((a, b) => a.fecha.localeCompare(b.fecha));
   const r = racha(), conTema = temas.filter((t) => t.resumen);
   const mensaje = (ls.get("repasa:mensaje") || "").trim();
+  const saldo = IA.saldoRestante();
   const inminente = proximos.find((x) => x.t?.resumen && diasHasta(x.fecha) <= 1);
   const sinPreparar = proximos.find((x) => x.e && diasHasta(x.fecha) <= 7);
   const ultimaCopia = ls.get("repasa:ultimaCopia");
@@ -221,6 +222,8 @@ async function pintarInicio() {
     ${!IA.tieneClave() ? `<a class="caja aviso enlace" href="#/ajustes"><b>Falta un paso:</b> poner la clave de la IA en Ajustes (lo hace Eduardo una vez).</a>` : ""}
     ${!nombre ? `<form class="caja" data-f="nombre"><label class="etq" for="nom">¿Cómo te llamas?</label><div class="fila"><input id="nom" autocomplete="given-name" placeholder="Tu nombre"><button class="btn" type="submit">Guardar</button></div></form>` : ""}
     ${!instalada && !ls.get("repasa:sinInstalar") ? `<div class="caja suave"><b>Ponla como una app:</b> en Safari toca <b>Compartir</b> (el cuadrado con la flecha) → <b>Añadir a pantalla de inicio</b>. Así tus temas quedan guardados para siempre. <button class="enlace-btn" data-a="cerrar-instalar">Vale</button></div>` : ""}
+    ${IA.sinSaldoAhora() ? `<div class="caja aviso-saldo"><b>⚠️ Se ha acabado el saldo de la IA</b><p class="peq">Puedes seguir repasando lo que ya tienes (tarjetas, test, resumen…), pero no crear temas ni corregir hasta que Eduardo lo recargue.</p><button class="btn ancho" data-a="avisar-saldo" data-que="acabado">📲 Avisar a Eduardo</button></div>`
+      : saldo != null && saldo < 2 ? `<div class="caja aviso-saldo poco"><b>Queda poco saldo de la IA</b><p class="peq">Quedan unos ${Math.max(0, saldo).toFixed(2).replace(".", ",")} $. Avisa a Eduardo para que lo recargue antes de que se acabe.</p><button class="btn sec ancho" data-a="avisar-saldo" data-que="poco">📲 Avisar a Eduardo</button></div>` : ""}
     ${mensaje ? `<div class="caja mensaje"><div class="etq">💌 Mensaje de Eduardo</div><p>${md(mensaje)}</p></div>` : ""}
     ${inminente ? `<a class="caja enlace examen-ya" href="#/tema/${inminente.t.id}/expres"><span class="emoji">⚡</span><span><b>Examen ${cuandoEs(inminente.fecha)}</b><small>${esc(inminente.t.resumen.titulo)} · haz el Repaso exprés</small></span><span class="flecha">›</span></a>` : ""}
     ${sinPreparar && !inminente ? `<a class="caja enlace examen-ya" href="#/nuevo/examen/${sinPreparar.e.id}"><span class="emoji">⏰</span><span><b>${esc(sinPreparar.e.asignatura)}: examen ${cuandoEs(sinPreparar.fecha)}</b><small>Aún no has creado el tema. Hazlo ya y te organizo los días.</small></span><span class="flecha">›</span></a>` : ""}
@@ -371,7 +374,7 @@ async function añadirFotos(input) {
 async function puedoCrearTema() {
   if (!IA.tieneClave()) return aviso("Primero hay que poner la clave en Ajustes"), false;
   if (trabajando) return aviso("Espera a que termine el tema que se está preparando"), false;
-  const limite = Number(ls.get("repasa:limiteDia") ?? 8);
+  const limite = Number(ls.get("repasa:limiteDia") ?? 0);
   const hoy = (await Almacen.todos()).filter((t) => iso(new Date(t.creado)) === hoyISO()).length;
   if (limite > 0 && hoy >= limite) return aviso(`Hoy ya has creado ${hoy} temas, que es el máximo. ¡Mañana más!`), false;
   return true;
@@ -1538,8 +1541,10 @@ function zonaEduardo() {
       <input id="aj-clave" type="password" autocomplete="off" value="${esc(IA.clave())}" placeholder="sk-ant-…">
       <label class="etq" for="aj-mensaje">💌 Mensaje para ella <span class="opc">(sale en su pantalla de inicio)</span></label>
       <textarea id="aj-mensaje" rows="2" placeholder="Ej.: ¡Mucho ánimo con el examen de mates! Confío en ti 💪">${esc(ls.get("repasa:mensaje") || "")}</textarea>
+      <label class="etq" for="aj-recarga">¿Has recargado saldo? Apunta cuánto ($) <span class="opc">(${IA.saldoRestante() != null ? `ahora quedan unos ${Math.max(0, IA.saldoRestante()).toFixed(2).replace(".", ",")} $` : "así le aviso cuando queden menos de 2 $"})</span></label>
+      <input id="aj-recarga" type="number" min="0" step="1" inputmode="decimal" placeholder="Ej.: 20">
       <label class="etq" for="aj-limite-dia">Temas nuevos al día como máximo <span class="opc">(0 = sin límite)</span></label>
-      <input id="aj-limite-dia" type="number" min="0" inputmode="numeric" value="${esc(ls.get("repasa:limiteDia") ?? 8)}">
+      <input id="aj-limite-dia" type="number" min="0" inputmode="numeric" value="${esc(ls.get("repasa:limiteDia") ?? 0)}">
       <label class="etq" for="aj-limite-mes">Gasto máximo al mes en $ <span class="opc">(0 = sin límite)</span></label>
       <input id="aj-limite-mes" type="number" min="0" step="1" inputmode="decimal" value="${esc(IA.limiteMes())}">
       <label class="etq" for="aj-pin">${ls.get("repasa:pin") ? "Cambiar el PIN" : "Poner un PIN"} <span class="opc">(${ls.get("repasa:pin") ? "vacío = se queda igual" : "para que solo entres tú"})</span></label>
@@ -1612,6 +1617,15 @@ const ACCIONES = {
     if (!confirm("¿Quitar este examen de la lista?")) return;
     ls.set("repasa:examenes", JSON.stringify(leerJSON("repasa:examenes", []).filter((x) => x.id !== b.dataset.id)));
     pintar();
+  },
+  "avisar-saldo": async (b) => {
+    const texto = b.dataset.que === "acabado" ? "Eduardo, se ha acabado el saldo de Repasa. ¿Me lo recargas? 🙏" : "Eduardo, queda poco saldo en Repasa. ¿Me lo recargas cuando puedas? 🙏";
+    try {
+      if (navigator.share) return await navigator.share({ text: texto });
+    } catch (e) {
+      if (e.name === "AbortError") return;
+    }
+    location.href = "https://wa.me/?text=" + encodeURIComponent(texto);
   },
   volver: () => (history.length > 1 ? history.back() : ir("#/")),
   "fin-guia": () => { ls.set("repasa:guiaVista", "1"); ir("#/"); },
@@ -1833,6 +1847,12 @@ document.addEventListener("submit", async (e) => {
   } else if (f === "eduardo") {
     IA.ponerClave($("#aj-clave").value);
     ls.set("repasa:mensaje", $("#aj-mensaje").value.trim());
+    const recarga = parseFloat($("#aj-recarga").value);
+    if (recarga > 0) {
+      // Lo que quedaba (si sabíamos) + lo que acaba de meter
+      IA.apuntarRecarga(Math.max(0, IA.saldoRestante() ?? 0) + recarga);
+      ls.set("repasa:sinSaldo", "");
+    }
     ls.set("repasa:limiteDia", String(Math.max(0, parseInt($("#aj-limite-dia").value, 10) || 0)));
     ls.set("repasa:limiteMes", String(Math.max(0, parseFloat($("#aj-limite-mes").value) || 0)));
     const pin = $("#aj-pin").value.trim();

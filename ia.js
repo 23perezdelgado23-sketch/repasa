@@ -35,6 +35,17 @@ const IA = (() => {
     return r.content.slice(i + 1).filter((b) => b.type === "text").map((b) => b.text).join("");
   };
 
+  // La API avisa así cuando la cuenta se queda sin crédito
+  const sinSaldo = (e) => /credit balance|billing|purchase credits/i.test(e?.message || "");
+
+  // Saldo que Eduardo dice que ha cargado: lo que queda es eso menos lo gastado desde entonces
+  const saldoRestante = () => {
+    let s = null;
+    try { s = JSON.parse(ls.get("repasa:saldo") || "null"); } catch {}
+    return s && s.cantidad > 0 ? s.cantidad - ((gasto().total || 0) - s.base) : null;
+  };
+  const apuntarRecarga = (cantidad) => ls.set("repasa:saldo", JSON.stringify({ cantidad, base: gasto().total || 0, fecha: new Date().toISOString() }));
+
   // Límite de gasto mensual que pone Eduardo (0 = sin límite)
   const limiteMes = () => Number(ls.get("repasa:limiteMes") || 0);
   const limiteSuperado = () => {
@@ -52,7 +63,14 @@ const IA = (() => {
       fallbacks: "default",
     });
     if (alTexto) s.on("text", alTexto);
-    const r = await s.finalMessage();
+    let r;
+    try {
+      r = await s.finalMessage();
+    } catch (e) {
+      if (sinSaldo(e)) ls.set("repasa:sinSaldo", new Date().toISOString());
+      throw e;
+    }
+    ls.set("repasa:sinSaldo", ""); // si responde, hay saldo
     if (r.stop_reason === "refusal") throw new Error("La IA no ha querido procesar esto. Prueba con otras fotos o con otra pregunta.");
     if (r.stop_reason === "max_tokens") throw new Error("Es demasiado largo para hacerlo de una vez. Divide las fotos en dos temas.");
     return { texto: textoFinal(r), coste: apuntar(r.usage || {}) };
@@ -380,19 +398,21 @@ Cada uno con una «pista» que ayude sin dar la respuesta y la «solucion» comp
   function traducirError(e) {
     const A = window.AnthropicSDK;
     const m = e?.message || String(e);
+    if (sinSaldo(e)) return "Se ha acabado el saldo de la IA. Pulsa «Avisar a Eduardo» en el inicio.";
     if (A && e instanceof A.AuthenticationError) return "La clave de la IA no es válida. Revísala en Ajustes.";
     if (A && e instanceof A.PermissionDeniedError) return "La clave no tiene permiso para usar la IA. Díselo a Eduardo.";
     if (A && e instanceof A.RateLimitError) return "Demasiadas consultas seguidas o se ha llegado al límite de gasto. Espera un poco o díselo a Eduardo.";
     if (A && e instanceof A.APIConnectionError) return "No hay conexión con la IA. Revisa internet y vuelve a intentarlo.";
     if (A && e instanceof A.APIError && e.status === 413) return "Las fotos pesan demasiado juntas. Divide el tema en dos.";
     if (A && e instanceof A.APIError && e.status >= 500) return "La IA está saturada ahora mismo. Inténtalo en un par de minutos.";
-    if (/credit|balance/i.test(m)) return "La cuenta de la IA no tiene saldo. Díselo a Eduardo.";
+    if (sinSaldo(e)) return "Se ha acabado el saldo de la IA. Pulsa «Avisar a Eduardo» en el inicio.";
     if (e instanceof SyntaxError) return "La respuesta llegó incompleta. Vuelve a intentarlo.";
     return m;
   }
 
   return {
     hacerTema, corregir, explicar, charlar, probarClave, traducirError, gasto,
+    saldoRestante, apuntarRecarga, sinSaldoAhora: () => !!ls.get("repasa:sinSaldo"),
     corregirFoto, ejerciciosParecidos, corregirOral, corregirSimulacro, combinar, limiteMes, identificarLibro, numerarPaginas,
     tieneClave: () => !!clave(),
     clave,
