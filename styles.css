@@ -149,6 +149,7 @@ input:focus, textarea:focus, select:focus { outline: 2px solid var(--acento); ou
 
 /* Inicio */
 .fila-tema { align-items: center; }
+.caja.fila-tema { display: flex; gap: 12px; }
 .nombre-tema { flex: 1; min-width: 0; font-weight: 700; }
 .nombre-tema .barra { height: 6px; margin: 6px 0 0; }
 .cuando { flex: none; font-size: 0.8rem; font-weight: 700; padding: 4px 10px; border-radius: 99px; background: var(--acento-suave); color: var(--acento); }
@@ -304,7 +305,7 @@ input:focus, textarea:focus, select:focus { outline: 2px solid var(--acento); ou
 :root[data-theme="dark"][data-color="rosa"] { --acento: #ff7ab9; }
 :root[data-theme="dark"][data-color="naranja"] { --acento: #ff9a5c; }
 
-/* Inicio: racha, accesos, mensaje y premios */
+/* Inicio: racha, accesos y mensaje */
 .cab-der { display: flex; align-items: center; gap: 8px; }
 .racha { font-weight: 800; text-decoration: none; color: var(--coral); background: var(--sup); box-shadow: var(--sombra); padding: 10px 14px; border-radius: 99px; }
 .racha.apagada { color: var(--suave); filter: grayscale(1); }
@@ -316,9 +317,6 @@ input:focus, textarea:focus, select:focus { outline: 2px solid var(--acento); ou
 .caja.mensaje { background: linear-gradient(135deg, color-mix(in srgb, var(--coral) 18%, var(--sup)), var(--acento-suave)); border: 0; }
 .caja.mensaje p { font-size: 1.05rem; font-weight: 600; }
 .caja.examen-ya { background: var(--mal-suave); border: 0; }
-.premio-cab { display: flex; justify-content: space-between; gap: 8px; font-size: 1.02rem; }
-.premio small { color: var(--suave); }
-.premio.conseguido { border: 2px solid var(--bien); background: var(--bien-suave); }
 .caja.fallo { border-left: 4px solid var(--mal); }
 .fila-tema.sin-caja { display: flex; align-items: center; text-decoration: none; color: inherit; padding: 8px 0; border-bottom: 1px solid var(--linea); }
 small.bloque { display: block; color: var(--suave); font-weight: 400; }
@@ -352,10 +350,6 @@ small.bloque { display: block; color: var(--suave); font-weight: 400; }
 .colores { display: flex; gap: 10px; margin-bottom: 6px; }
 .color-op { width: 38px; height: 38px; border-radius: 50%; border: 3px solid var(--sup); box-shadow: 0 0 0 2px var(--linea); cursor: pointer; }
 .color-op.activa { box-shadow: 0 0 0 3px var(--tinta); }
-.premio-edit { background: var(--sup-2); border-radius: 12px; padding: 10px; margin-bottom: 10px; }
-.premio-edit input, .premio-edit select { margin: 0; background: var(--sup); }
-.premio-edit .fila { margin-top: 8px; }
-.premio-edit .fila input { flex: 0 0 90px; }
 .logros { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 12px; }
 .logro { background: var(--sup); border: 1px solid var(--linea); border-radius: var(--radio); padding: 14px; text-align: center; box-shadow: var(--sombra); }
 .logro b { display: block; margin-top: 6px; }
@@ -385,6 +379,34 @@ small.bloque { display: block; color: var(--suave); font-weight: 400; }
 .puntos { display: flex; justify-content: center; gap: 8px; margin-bottom: 22px; }
 .puntos span { width: 8px; height: 8px; border-radius: 50%; background: var(--linea); }
 .puntos span.activo { background: var(--acento); width: 22px; border-radius: 99px; }
+
+/* Exámenes apuntados */
+.quitar-ex { flex: none; width: 34px; height: 34px; border-radius: 50%; border: 0; background: var(--sup-2); color: var(--suave); cursor: pointer; }
+.apuntar summary { font-weight: 700; color: var(--acento); cursor: pointer; list-style: none; }
+.apuntar summary::-webkit-details-marker { display: none; }
+.apuntar[open] summary { margin-bottom: 12px; }
+.fila-para { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+
+/* Mis libros */
+.libro-fila .portada { width: 52px; height: 70px; object-fit: cover; border-radius: 6px; flex: none; box-shadow: var(--sombra); }
+.libro-fila small + small { margin-top: 2px; }
+.rango { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.rango label { font-size: 0.85rem; color: var(--suave); font-weight: 600; }
+.rango input { margin: 4px 0 0; font-size: 1.2rem; font-weight: 700; text-align: center; }
+.foto .num.sin { background: var(--mal); }
+
+/* Concentración */
+.foco { min-height: calc(100vh - 40px); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; text-align: center; padding: 20px 0; }
+.foco-fase { font-size: 1.1rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--acento); }
+.foco.descanso .foco-fase { color: var(--bien); }
+.foco-reloj { position: relative; width: min(78vw, 300px); aspect-ratio: 1; }
+.foco-reloj svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+.anillo-fondo { fill: none; stroke: var(--sup-2); stroke-width: 8; }
+.anillo { fill: none; stroke: var(--acento); stroke-width: 8; stroke-linecap: round; transition: stroke-dashoffset 0.5s linear; }
+.foco.descanso .anillo { stroke: var(--bien); }
+.foco-tiempo { position: absolute; inset: 0; display: grid; place-items: center; font-size: 3.4rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.foco-texto { color: var(--suave); max-width: 320px; }
+.foco-bloques { font-size: 0.9rem; color: var(--suave); }
 
 /* Aviso flotante */
 .toast { position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 24px); transform: translateX(-50%); z-index: 30; background: var(--tinta); color: var(--fondo); padding: 12px 18px; border-radius: 14px; font-weight: 600; max-width: calc(100% - 32px); box-shadow: 0 8px 30px rgba(0, 0, 0, 0.25); transition: opacity 0.4s, transform 0.4s; }

@@ -72,6 +72,8 @@ const LOGROS = [
   { id: "sobresaliente", icono: "⭐", nombre: "Sobresaliente", desc: "Un 9 o más en una corrección", ok: (s) => s.sobresalientes >= 1 },
   { id: "simulacro", icono: "⏱️", nombre: "Prueba de fuego", desc: "Terminar un simulacro de examen", ok: (s) => s.simulacros >= 1 },
   { id: "oral", icono: "🎙️", nombre: "Buena oradora", desc: "Explicar un tema en voz alta", ok: (s) => s.orales >= 1 },
+  { id: "foco1", icono: "🎯", nombre: "Concentrada", desc: "Terminar un bloque de concentración", ok: (s) => s.concentracion >= 1 },
+  { id: "foco20", icono: "🧘", nombre: "Mente de acero", desc: "20 bloques de concentración", ok: (s) => s.concentracion >= 20 },
   { id: "racha3", icono: "🔥", nombre: "3 días seguidos", desc: "Estudiar 3 días seguidos", ok: (s, r) => r >= 3 },
   { id: "racha7", icono: "🚀", nombre: "Una semana", desc: "Estudiar 7 días seguidos", ok: (s, r) => r >= 7 },
   { id: "racha30", icono: "👑", nombre: "Imparable", desc: "Estudiar 30 días seguidos", ok: (s, r) => r >= 30 },
@@ -144,21 +146,6 @@ const PASOS_TEMA = [
   ["Antes del examen", ["expres", "plan"]],
 ];
 
-// ---------- Premios que pone Eduardo ----------
-const META_PREMIO = {
-  racha: { nombre: "Días seguidos estudiando", texto: (m) => `${m} días seguidos estudiando`, valor: (v) => `${v}` },
-  tarjetas: { nombre: "Tarjetas repasadas", texto: (m) => `Repasar ${m} tarjetas`, valor: (v) => `${v}` },
-  simulacro: { nombre: "Nota en un simulacro", texto: (m) => `Sacar un ${String(m).replace(".", ",")} o más en un simulacro`, valor: (v) => (v ? notaTexto(v) : "ninguno aún") },
-  temas: { nombre: "Temas creados", texto: (m) => `Crear ${m} temas`, valor: (v) => `${v}` },
-};
-function progresoPremio(x, temas) {
-  const s = leerJSON("repasa:stats", {});
-  if (x.tipo === "racha") return racha();
-  if (x.tipo === "tarjetas") return s.tarjetas || 0;
-  if (x.tipo === "temas") return s.temas || 0;
-  return Math.max(0, ...temas.flatMap((t) => (t.progreso?.simulacros || []).map((m) => m.nota)));
-}
-
 // ---------- Progreso ----------
 const progresoVacio = () => ({ test: null, preguntas: {}, tarjetas: {}, plan: {}, simulacros: [] });
 const esPendiente = (p) => !p || p.proxima <= hoyISO();
@@ -183,7 +170,10 @@ async function pintar() {
   urls = [];
   const [ruta, a, b] = location.hash.replace(/^#\/?/, "").split("/");
   try {
-    if (ruta === "nuevo") return pintarNuevo(a === "traducir");
+    if (ruta === "nuevo") return pintarNuevo(a === "traducir", a === "examen" ? b : null);
+    if (ruta === "libros") return await pintarLibros();
+    if (ruta === "libro") return await pintarLibro(a);
+    if (ruta === "concentrar") return pintarConcentrar();
     if (ruta === "tema") return await pintarTema(a, b);
     if (ruta === "repaso") return await pintarRepaso();
     if (ruta === "ajustes") return pintarAjustes();
@@ -200,42 +190,69 @@ const ir = (h) => (location.hash === h ? pintar() : (location.hash = h));
 window.addEventListener("hashchange", () => { pintar(); window.scrollTo(0, 0); });
 
 // ---------- Inicio ----------
+const ASIGNATURAS = ["Matemáticas", "Lengua Castellana y Literatura", "Inglés", "Francés", "Geografía e Historia", "Biología y Geología", "Física y Química", "Tecnología y Digitalización", "Educación Física", "Música", "Educación Plástica, Visual y Audiovisual", "Religión", "Valores Cívicos y Éticos"];
+const examenesApuntados = () => leerJSON("repasa:examenes", []).filter((e) => diasHasta(e.fecha) >= 0).sort((a, b) => a.fecha.localeCompare(b.fecha));
+
 async function pintarInicio() {
   const temas = (await Almacen.todos()).sort((a, b) => (b.actualizado || 0) - (a.actualizado || 0));
   const nombre = ls.get("repasa:nombre");
   const pendientes = temas.reduce((n, t) => n + tarjetasPendientes(t).length, 0);
-  const proximos = temas.filter((t) => t.fechaExamen && diasHasta(t.fechaExamen) >= 0).sort((a, b) => a.fechaExamen.localeCompare(b.fechaExamen));
   const instalada = navigator.standalone || matchMedia("(display-mode: standalone)").matches;
   const grupos = {};
   for (const t of temas) (grupos[t.resumen?.asignatura || (trabajando?.id === t.id ? "Preparándose…" : "Sin terminar")] ||= []).push(t);
-
+  // Exámenes: los de los temas y los apuntados que aún no tienen tema
+  const proximos = [
+    ...temas.filter((t) => t.fechaExamen && diasHasta(t.fechaExamen) >= 0).map((t) => ({ fecha: t.fechaExamen, t })),
+    ...examenesApuntados().map((e) => ({ fecha: e.fecha, e })),
+  ].sort((a, b) => a.fecha.localeCompare(b.fecha));
   const r = racha(), conTema = temas.filter((t) => t.resumen);
   const mensaje = (ls.get("repasa:mensaje") || "").trim();
-  const inminente = proximos.find((t) => t.resumen && diasHasta(t.fechaExamen) <= 1);
-  const premios = leerJSON("repasa:premios", []).filter((x) => x.texto);
+  const inminente = proximos.find((x) => x.t?.resumen && diasHasta(x.fecha) <= 1);
+  const sinPreparar = proximos.find((x) => x.e && diasHasta(x.fecha) <= 7);
+  const ultimaCopia = ls.get("repasa:ultimaCopia");
+  const pedirCopia = conTema.length >= 3 && (!ultimaCopia || diasEntre(ultimaCopia, hoyISO()) > 14);
+  const asignaturas = [...new Set([...conTema.map((t) => t.resumen.asignatura), ...ASIGNATURAS])];
   app.innerHTML = `
     <header class="cab inicio"><div><div class="hola">${nombre ? `Hola, ${esc(nombre)} ${esc(ls.get("repasa:emoji") || "👋")}` : "Hola 👋"}</div><h1>Repasa</h1></div>
       <div class="cab-der"><a class="racha ${r ? "" : "apagada"}" href="#/logros" aria-label="Racha y logros">🔥 ${r}</a><a class="icono-btn" href="#/ajustes" aria-label="Ajustes">⚙️</a></div></header>
     ${!IA.tieneClave() ? `<a class="caja aviso enlace" href="#/ajustes"><b>Falta un paso:</b> poner la clave de la IA en Ajustes (lo hace Eduardo una vez).</a>` : ""}
     ${!nombre ? `<form class="caja" data-f="nombre"><label class="etq" for="nom">¿Cómo te llamas?</label><div class="fila"><input id="nom" autocomplete="given-name" placeholder="Tu nombre"><button class="btn" type="submit">Guardar</button></div></form>` : ""}
-    ${!instalada && !ls.get("repasa:sinInstalar") ? `<div class="caja suave"><b>Ponla como una app:</b> en Safari toca <b>Compartir</b> (el cuadrado con la flecha) → <b>Añadir a pantalla de inicio</b>. <button class="enlace-btn" data-a="cerrar-instalar">Vale</button></div>` : ""}
+    ${!instalada && !ls.get("repasa:sinInstalar") ? `<div class="caja suave"><b>Ponla como una app:</b> en Safari toca <b>Compartir</b> (el cuadrado con la flecha) → <b>Añadir a pantalla de inicio</b>. Así tus temas quedan guardados para siempre. <button class="enlace-btn" data-a="cerrar-instalar">Vale</button></div>` : ""}
     ${mensaje ? `<div class="caja mensaje"><div class="etq">💌 Mensaje de Eduardo</div><p>${md(mensaje)}</p></div>` : ""}
-    ${inminente ? `<a class="caja enlace examen-ya" href="#/tema/${inminente.id}/expres"><span class="emoji">⚡</span><span><b>¡Examen ${cuandoEs(inminente.fechaExamen)}!</b><small>${esc(inminente.resumen.titulo)} · haz el Repaso exprés</small></span><span class="flecha">›</span></a>` : ""}
+    ${inminente ? `<a class="caja enlace examen-ya" href="#/tema/${inminente.t.id}/expres"><span class="emoji">⚡</span><span><b>Examen ${cuandoEs(inminente.fecha)}</b><small>${esc(inminente.t.resumen.titulo)} · haz el Repaso exprés</small></span><span class="flecha">›</span></a>` : ""}
+    ${sinPreparar && !inminente ? `<a class="caja enlace examen-ya" href="#/nuevo/examen/${sinPreparar.e.id}"><span class="emoji">⏰</span><span><b>${esc(sinPreparar.e.asignatura)}: examen ${cuandoEs(sinPreparar.fecha)}</b><small>Aún no has creado el tema. Hazlo ya y te organizo los días.</small></span><span class="flecha">›</span></a>` : ""}
     <div class="acciones">
       <a class="grande-btn principal" href="#/nuevo"><span class="emoji">📸</span><span><b>Nuevo tema</b><small>Fotos de tu libro o apuntes → todo listo para estudiar</small></span></a>
-      <a class="grande-btn" href="#/nuevo/traducir"><span class="emoji">🌍</span><span><b>Traducir con fotos</b><small>Inglés, francés o lo que sea → traducido y resumido</small></span></a>
       <div class="dos">
-        <a class="grande-btn mini" href="#/corregir"><span class="emoji">✏️</span><span><b>Corregir un ejercicio</b><small>Foto de tus deberes → nota y fallos</small></span></a>
-        <a class="grande-btn mini ${conTema.length < 2 ? "apagado" : ""}" href="#/combinar"><span class="emoji">🧩</span><span><b>Juntar temas</b><small>Para un examen con varios temas</small></span></a>
+        <a class="grande-btn mini" href="#/libros"><span class="emoji">📚</span><span><b>Mis libros</b><small>Guarda tus libros y elige páginas</small></span></a>
+        <a class="grande-btn mini" href="#/nuevo/traducir"><span class="emoji">🌍</span><span><b>Traducir</b><small>Inglés, francés… con fotos</small></span></a>
+        <a class="grande-btn mini" href="#/corregir"><span class="emoji">✏️</span><span><b>Corregir</b><small>Foto de tus deberes → nota</small></span></a>
+        <a class="grande-btn mini" href="#/concentrar"><span class="emoji">🎯</span><span><b>Concentrarme</b><small>Estudiar sin distracciones</small></span></a>
       </div>
     </div>
-    ${pendientes ? `<a class="caja repaso enlace" href="#/repaso"><span class="emoji">🧠</span><span><b>Repaso de hoy</b><small>${pendientes} tarjeta${pendientes === 1 ? "" : "s"} para no olvidar lo que ya sabes</small></span><span class="flecha">›</span></a>` : ""}
-    ${premios.length ? `<h2 class="titulo-sec">🎁 Premios de Eduardo</h2>${premios.map((x) => { const v = progresoPremio(x, temas), ok = v >= x.meta; return `<div class="caja premio ${ok ? "conseguido" : ""}"><div class="premio-cab"><b>${esc(x.texto)}</b><span>${ok ? "🎉" : "🎁"}</span></div><small>${esc(META_PREMIO[x.tipo].texto(x.meta))}${ok ? " · ¡Conseguido! Enséñaselo a Eduardo" : ` · llevas ${META_PREMIO[x.tipo].valor(v)}`}</small>${barra((Math.min(v, x.meta) / x.meta) * 100)}</div>`; }).join("")}` : ""}
-    ${proximos.length ? `<h2 class="titulo-sec">Próximos exámenes</h2>${proximos.map((t) => `<a class="caja fila-tema enlace" href="#/tema/${t.id}/plan"><span class="cuando ${diasHasta(t.fechaExamen) <= 2 ? "urgente" : ""}">${cuandoEs(t.fechaExamen)}</span><span class="nombre-tema">${esc(t.resumen?.titulo || "Tema")}<small>${esc(t.resumen?.asignatura || "")}</small></span><span class="flecha">›</span></a>`).join("")}` : ""}
+    ${pendientes ? `<a class="caja repaso enlace" href="#/repaso"><span class="emoji">🧠</span><span><b>Repaso de hoy</b><small>${pendientes} tarjeta${pendientes === 1 ? "" : "s"} · unos ${Math.max(2, Math.round(pendientes / 4))} minutos</small></span><span class="flecha">›</span></a>` : ""}
+    <h2 class="titulo-sec">Próximos exámenes</h2>
+    ${proximos.map((x) => x.t
+      ? `<a class="caja fila-tema enlace" href="#/tema/${x.t.id}/plan"><span class="cuando ${diasHasta(x.fecha) <= 2 ? "urgente" : ""}">${cuandoEs(x.fecha)}</span><span class="nombre-tema">${esc(x.t.resumen?.titulo || "Tema")}<small>${esc(x.t.resumen?.asignatura || "")}</small></span><span class="flecha">›</span></a>`
+      : `<div class="caja fila-tema"><span class="cuando ${diasHasta(x.fecha) <= 7 ? "urgente" : ""}">${cuandoEs(x.fecha)}</span><span class="nombre-tema">${esc(x.e.asignatura)}<small>${x.e.que ? esc(x.e.que) + " · " : ""}<a href="#/nuevo/examen/${x.e.id}">Prepararlo →</a></small></span><button class="quitar-ex" data-a="borrar-examen" data-id="${x.e.id}" aria-label="Quitar examen">✕</button></div>`).join("")}
+    <details class="caja apuntar" ${proximos.length ? "" : "open"}><summary>➕ Apuntar un examen</summary>
+      <form data-f="examen">
+        <label class="etq" for="ex-asig">Asignatura</label>
+        <input id="ex-asig" list="lista-asig" required placeholder="Ej.: Geografía e Historia"><datalist id="lista-asig">${asignaturas.map((a) => `<option value="${esc(a)}">`).join("")}</datalist>
+        <label class="etq" for="ex-fecha">Fecha</label>
+        <input id="ex-fecha" type="date" required min="${hoyISO()}">
+        <label class="etq" for="ex-que">¿Qué entra? <span class="opc">(opcional)</span></label>
+        <input id="ex-que" placeholder="Ej.: temas 3 y 4">
+        <button class="btn ancho" type="submit">Apuntar</button>
+      </form>
+      <p class="peq">Apúntalo en cuanto te lo digan: te aviso para que empieces con tiempo.</p>
+    </details>
+    ${pedirCopia ? `<a class="caja suave enlace" href="#/ajustes"><span class="emoji">💾</span><span><b>Haz una copia de seguridad</b><small>Tarda 10 segundos y no perderás tus temas si cambias de móvil</small></span><span class="flecha">›</span></a>` : ""}
     ${Object.entries(grupos).map(([asig, ts]) => `<h2 class="titulo-sec">${esc(asig)}</h2>${ts.map((t) => `
       <a class="caja fila-tema enlace" href="#/tema/${t.id}">
         <span class="nombre-tema">${t.objetivo === "traducir" ? "🌍 " : ""}${esc(t.resumen?.titulo || `${t.fotos.length} foto${t.fotos.length === 1 ? "" : "s"}`)}<small>${t.resumen ? `Lo dominas al ${dominio(t)}%` : trabajando?.id === t.id ? "La IA está con ello…" : "No se terminó: toca para reintentar"}</small>${t.resumen ? barra(dominio(t)) : ""}</span><span class="flecha">›</span>
       </a>`).join("")}`).join("")}
+    ${conTema.length >= 2 ? `<a class="enlace-pie" href="#/combinar">🧩 ¿Un examen con varios temas? Júntalos en uno</a>` : ""}
     ${!temas.length ? `<div class="vacio"><p>Aún no tienes temas.</p><p>Haz fotos a las páginas que entran y te preparo el resumen, el esquema, un test, tarjetas para memorizar y las preguntas que pueden caer, con corrección.</p></div>` : ""}`;
 }
 
@@ -247,11 +264,15 @@ function selectorIdioma(id, valor, texto) {
     <input id="${id}-otro" class="${otro ? "" : "oculto"}" placeholder="Escribe el idioma" value="${otro ? esc(valor) : ""}">`;
 }
 
-function pintarNuevo(traducir) {
+function pintarNuevo(traducir, examenId) {
+  const e = examenId && leerJSON("repasa:examenes", []).find((x) => x.id === examenId);
+  if (e && borrador?.examenId !== e.id) borrador = { traducir: false, fotos: borrador?.traducir === false && !borrador.examenId ? borrador.fotos : [], objetivo: "examen", idioma: "Español", fecha: e.fecha, notas: e.que ? `Entra: ${e.que}` : "", examenId: e.id, para: `${e.asignatura} · ${cuandoEs(e.fecha)}` };
   if (!borrador || borrador.traducir !== traducir) borrador = { traducir, fotos: [], objetivo: traducir ? "traducir" : "examen", idioma: "Español", fecha: "", notas: "" };
   const b = borrador;
   app.innerHTML = `
     ${cabecera(traducir ? "Traducir con fotos" : "Nuevo tema")}
+    ${b.para ? `<div class="caja suave fila-para"><span>📅 Para el examen de <b>${esc(b.para)}</b></span><button class="enlace-btn" data-a="soltar-examen">Quitar</button></div>` : ""}
+    ${b.deLibro ? `<div class="caja suave fila-para"><span>📚 ${esc(b.deLibro)}</span></div>` : ""}
     <div class="caja">
       <div class="etq">1. ${traducir ? "Haz foto al texto" : "Haz fotos a las páginas"}</div>
       <p class="peq">Una foto por página, recta, con luz y la página entera. Por orden. Hasta ${MAX_FOTOS}.</p>
@@ -271,7 +292,7 @@ function pintarNuevo(traducir) {
       ${selectorIdioma("idioma", b.idioma, "Idioma del resumen")}
     </div>`}
     <div class="caja">
-      <label class="etq" for="fecha">${traducir ? "3." : "3."} ¿Cuándo es el examen o la entrega? <span class="opc">(opcional)</span></label>
+      <label class="etq" for="fecha">3. ¿Cuándo es el examen o la entrega? <span class="opc">(opcional)</span></label>
       <input type="date" id="fecha" min="${hoyISO()}" value="${esc(b.fecha)}">
       <label class="etq" for="notas">¿Algo que haya dicho el profe? <span class="opc">(opcional)</span></label>
       <textarea id="notas" rows="3" placeholder="${traducir ? "Ej.: es para el examen de inglés, céntrate en los verbos…" : "Ej.: entra hasta la página 54, pregunta mucho las fechas, la presentación dura 5 minutos…"}">${esc(b.notas)}</textarea>
@@ -287,7 +308,7 @@ function leerIdioma() {
 }
 
 // Reduce la foto (lado largo 2000 px, JPEG) para que pese poco pero se lea perfecto
-async function comprimir(file) {
+async function comprimir(file, max = 2000) {
   let img = await createImageBitmap(file, { imageOrientation: "from-image" }).catch(() => null);
   if (!img)
     img = await new Promise((ok, mal) => {
@@ -296,7 +317,7 @@ async function comprimir(file) {
       i.onerror = () => mal(new Error("No se ha podido abrir una de las fotos"));
       i.src = URL.createObjectURL(file);
     });
-  const f = Math.min(1, 2000 / Math.max(img.width, img.height));
+  const f = Math.min(1, max / Math.max(img.width, img.height));
   const c = document.createElement("canvas");
   c.width = Math.round(img.width * f);
   c.height = Math.round(img.height * f);
@@ -315,6 +336,8 @@ async function añadirFotos(input) {
   const archivos = [...input.files];
   input.value = "";
   if (!archivos.length) return;
+  if (input.dataset.fotos === "portada") return nuevoLibro(await comprimir(archivos[0], 1600));
+  if (input.dataset.fotos === "libro") return guardarPaginasLibro(archivos);
   const destino = input.dataset.fotos === "tema" ? temaVisible.fotos : input.dataset.fotos === "corregir" ? fotosCorregir : borrador.fotos;
   const sitio = (input.dataset.fotos === "corregir" ? 5 : MAX_FOTOS) - destino.length;
   if (sitio <= 0) return aviso(input.dataset.fotos === "corregir" ? "Como mucho 5 fotos por corrección" : `Como mucho ${MAX_FOTOS} fotos por tema`);
@@ -331,6 +354,7 @@ async function añadirFotos(input) {
     $("#corrector").innerHTML = htmlCorrector();
   } else if (input.dataset.fotos === "tema") {
     if (!nuevas.length) return;
+    if (trabajando) return aviso("Espera a que termine el tema que se está preparando");
     if (!confirm(`¿Añado ${nuevas.length} página${nuevas.length === 1 ? "" : "s"} y rehago el material con todas? Se reinicia tu progreso de este tema.`)) return;
     temaVisible.fotos.push(...nuevas);
     generar(temaVisible);
@@ -343,6 +367,7 @@ async function añadirFotos(input) {
 // Límite de temas nuevos al día que pone Eduardo (0 = sin límite)
 async function puedoCrearTema() {
   if (!IA.tieneClave()) return aviso("Primero hay que poner la clave en Ajustes"), false;
+  if (trabajando) return aviso("Espera a que termine el tema que se está preparando"), false;
   const limite = Number(ls.get("repasa:limiteDia") ?? 8);
   const hoy = (await Almacen.todos()).filter((t) => iso(new Date(t.creado)) === hoyISO()).length;
   if (limite > 0 && hoy >= limite) return aviso(`Hoy ya has creado ${hoy} temas, que es el máximo. ¡Mañana más!`), false;
@@ -352,12 +377,13 @@ async function puedoCrearTema() {
 async function crear() {
   if (!(await puedoCrearTema())) return;
   const b = borrador;
+  if (b.examenId) ls.set("repasa:examenes", JSON.stringify(leerJSON("repasa:examenes", []).filter((x) => x.id !== b.examenId)));
   b.idioma = leerIdioma();
   b.fecha = $("#fecha").value;
   b.notas = $("#notas").value.trim();
   const t = {
     id: nuevoId(), creado: Date.now(), fotos: b.fotos, objetivo: b.objetivo, idioma: b.idioma, fechaExamen: b.fecha, planInicio: hoyISO(),
-    notas: b.notas, resumen: null, progreso: progresoVacio(), chat: [], coste: 0,
+    notas: [b.contextoLibro, b.notas].filter(Boolean).join("\n"), resumen: null, progreso: progresoVacio(), chat: [], coste: 0,
   };
   await Almacen.guardar(t);
   borrador = null;
@@ -1133,7 +1159,9 @@ function calendario(eventos) {
   }
   l.push("END:VCALENDAR");
   // Abrir el archivo hace que el iPhone ofrezca «Añadir todo» al Calendario
-  location.href = "data:text/calendar;charset=utf-8," + encodeURIComponent(l.join("\r\n"));
+  const url = URL.createObjectURL(new Blob([l.join("\r\n")], { type: "text/calendar;charset=utf-8" }));
+  location.href = url;
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
 
 const base64ABlob = (b64) => {
@@ -1141,7 +1169,7 @@ const base64ABlob = (b64) => {
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
   return new Blob([bytes], { type: "image/jpeg" });
 };
-const AJUSTES_COPIA = ["repasa:nombre", "repasa:emoji", "repasa:color", "repasa:dias", "repasa:stats", "repasa:logros", "repasa:correcciones", "repasa:horaEstudio", "repasa:ocultarConceptos", "repasa:gustos", "repasa:mensaje", "repasa:premios"];
+const AJUSTES_COPIA = ["repasa:nombre", "repasa:emoji", "repasa:color", "repasa:dias", "repasa:stats", "repasa:logros", "repasa:correcciones", "repasa:horaEstudio", "repasa:ocultarConceptos", "repasa:gustos", "repasa:mensaje", "repasa:examenes"];
 
 async function exportarCopia(b) {
   b.disabled = true;
@@ -1152,6 +1180,7 @@ async function exportarCopia(b) {
       app: "repasa", version: 1, fecha: new Date().toISOString(),
       ajustes: Object.fromEntries(AJUSTES_COPIA.map((k) => [k, ls.get(k)])),
       temas: await Promise.all(temas.map(async (t) => ({ ...t, fotos: await Promise.all(t.fotos.map(aBase64)) }))),
+      libros: await Promise.all((await Almacen.libros.todos()).map(async (l) => ({ ...l, portada: l.portada ? await aBase64(l.portada) : null, paginas: await Promise.all(l.paginas.map(async (p) => ({ ...p, foto: await aBase64(p.foto) }))) }))),
     };
     await compartirArchivo(`repasa-copia-${hoyISO()}.json`, JSON.stringify(datos), "application/json");
     ls.set("repasa:ultimaCopia", hoyISO());
@@ -1173,8 +1202,10 @@ async function importarCopia(input) {
   } catch {
     return aviso("Ese archivo no es una copia de Repasa");
   }
-  if (!confirm(`¿Recupero los ${d.temas.length} temas de la copia del ${new Date(d.fecha).toLocaleDateString("es-ES")}? Los temas que ya tienes se quedan.`)) return;
+  const libros = d.libros || [];
+  if (!confirm(`¿Recupero ${d.temas.length} temas${libros.length ? ` y ${libros.length} libros` : ""} de la copia del ${new Date(d.fecha).toLocaleDateString("es-ES")}? Lo que ya tienes se queda.`)) return;
   for (const t of d.temas) await Almacen.guardar({ ...t, fotos: t.fotos.map(base64ABlob) });
+  for (const l of libros) await Almacen.libros.guardar({ ...l, portada: l.portada ? base64ABlob(l.portada) : null, paginas: l.paginas.map((p) => ({ ...p, foto: base64ABlob(p.foto) })) });
   for (const [k, v] of Object.entries(d.ajustes || {})) if (v != null) ls.set(k, v);
   aplicarColor();
   aviso("Copia recuperada ✅");
@@ -1200,13 +1231,221 @@ async function pintarCombinar() {
     <button class="btn enorme" data-a="crear-combinado">🧩 Juntar y preparar</button>`}`;
 }
 
+// ---------- Mis libros ----------
+const hastaPag = (p) => (p.doble ? p.num + 1 : p.num);
+// «10-24, 40-52»: las páginas que tiene guardadas
+function paginasTexto(l) {
+  const nums = [...new Set(l.paginas.filter((p) => p.num).flatMap((p) => (p.doble ? [p.num, p.num + 1] : [p.num])))].sort((a, b) => a - b);
+  const tramos = [];
+  for (const n of nums) {
+    const u = tramos.at(-1);
+    if (u && n === u[1] + 1) u[1] = n;
+    else tramos.push([n, n]);
+  }
+  return tramos.map(([a, b]) => (a === b ? `${a}` : `${a}-${b}`)).join(", ");
+}
+
+async function pintarLibros() {
+  const libros = (await Almacen.libros.todos()).sort((a, b) => (a.asignatura || "").localeCompare(b.asignatura || ""));
+  app.innerHTML = `${cabecera("Mis libros")}
+    <p class="intro">Guarda aquí las páginas de tus libros una sola vez. Luego, para estudiar, eliges «páginas 40 a 52» y listo, sin volver a hacer fotos.</p>
+    ${libros.map((l) => `<a class="caja enlace libro-fila" href="#/libro/${l.id}">${l.portada ? `<img class="portada" src="${verFoto(l.portada)}" alt="">` : `<span class="emoji">📘</span>`}<span class="nombre-tema">${esc(l.titulo || "Libro")}<small>${esc([l.asignatura, l.curso].filter(Boolean).join(" · "))}</small><small>${l.paginas.length ? `Páginas: ${esc(paginasTexto(l) || "sin número")}` : "Aún sin páginas"}</small></span><span class="flecha">›</span></a>`).join("")}
+    <div class="caja"><div class="etq">Añadir un libro</div><p class="peq">Haz una foto a la portada y lo reconozco.</p>
+      <div class="fila"><label class="btn" for="por-cam">📷 Foto a la portada</label><label class="btn sec" for="por-gal">🖼️ De la galería</label></div>
+      <input type="file" id="por-cam" accept="image/*" capture="environment" data-fotos="portada" hidden>
+      <input type="file" id="por-gal" accept="image/*" data-fotos="portada" hidden>
+      <div id="cargando-fotos"></div></div>`;
+}
+
+async function nuevoLibro(portada) {
+  if (!IA.tieneClave()) return aviso("Primero hay que poner la clave en Ajustes");
+  const z = $("#cargando-fotos");
+  if (z) z.innerHTML = `<p class="peq">Mirando la portada…</p>`;
+  const l = { id: nuevoId(), creado: Date.now(), portada, titulo: "", asignatura: "", editorial: "", curso: "", paginas: [] };
+  try {
+    Object.assign(l, (await IA.identificarLibro(await aBase64(portada))).datos);
+  } catch (e) {
+    aviso("No he podido leer la portada. Ponle tú el nombre con ✏️");
+  }
+  l.titulo ||= l.asignatura || "Mi libro";
+  await Almacen.libros.guardar(l);
+  ir(`#/libro/${l.id}`);
+}
+
+let libroVisible = null;
+async function pintarLibro(id) {
+  const l = await Almacen.libros.leer(id);
+  if (!l) return ir("#/libros");
+  libroVisible = l;
+  l.paginas.sort((a, b) => (a.num || 1e9) - (b.num || 1e9));
+  const primera = l.paginas.find((p) => p.num)?.num || "";
+  let ultima = primera; // hasta donde llegan seguidas las páginas guardadas
+  for (const p of l.paginas) if (p.num && p.num <= ultima + 1) ultima = Math.max(ultima, hastaPag(p));
+  app.innerHTML = `${cabecera(l.titulo, "#/libros", `<button class="icono-btn" data-a="editar-libro" aria-label="Cambiar nombre">✏️</button>`)}
+    <div class="sub-cab">${esc([l.asignatura, l.editorial, l.curso].filter(Boolean).join(" · "))}</div>
+    ${l.paginas.length ? `<div class="caja destacada"><div class="etq">Estudiar unas páginas</div>
+      <p class="peq">Tienes guardadas: ${esc(paginasTexto(l) || "páginas sin número")}</p>
+      <div class="rango"><label>Desde la página<input type="number" id="pag-desde" inputmode="numeric" value="${primera}"></label><label>Hasta la<input type="number" id="pag-hasta" inputmode="numeric" value="${ultima}"></label></div>
+      <button class="btn ancho" data-a="tema-de-libro">✨ Crear el tema con esas páginas</button></div>` : ""}
+    <div class="caja"><div class="etq">Guardar páginas</div>
+      <p class="peq">Una foto por página (o el libro abierto con dos). Leo el número de cada una y las guardo en orden. Si repites una página, se cambia por la nueva.</p>
+      <p class="peq"><b>Más rápido:</b> haz las fotos con la cámara del móvil y luego elígelas todas juntas desde la galería.</p>
+      <div class="fila"><label class="btn sec" for="lib-gal">🖼️ Elegir de la galería</label><label class="btn sec" for="lib-cam">📷 Hacer foto</label></div>
+      <input type="file" id="lib-gal" accept="image/*" multiple data-fotos="libro" hidden>
+      <input type="file" id="lib-cam" accept="image/*" capture="environment" data-fotos="libro" hidden>
+      <div id="cargando-fotos"></div></div>
+    ${l.paginas.length ? `<h2 class="titulo-sec">Páginas guardadas</h2><div class="fotos">${l.paginas.map((p, i) => `<button class="foto" data-a="pagina-libro" data-i="${i}"><img src="${verFoto(p.foto)}" alt="Página ${p.num || "sin número"}"><span class="num ${p.num ? "" : "sin"}">${p.num ? (p.doble ? `${p.num}-${p.num + 1}` : p.num) : "¿?"}</span></button>`).join("")}</div>
+      <p class="peq">Toca una página para cambiarle el número o borrarla.</p>` : ""}
+    <button class="btn peligro" data-a="borrar-libro">Borrar este libro</button>`;
+}
+
+async function guardarPaginasLibro(archivos) {
+  const l = libroVisible, z = $("#cargando-fotos");
+  if (!IA.tieneClave()) return aviso("Primero hay que poner la clave en Ajustes");
+  if (archivos.length > 40) return aviso("Como mucho 40 fotos cada vez");
+  let sinNumero = 0, hechas = 0;
+  // De 10 en 10: así no pesa demasiado cada envío
+  for (let i = 0; i < archivos.length; i += 10) {
+    const grupo = archivos.slice(i, i + 10);
+    if (z) z.innerHTML = `<p class="peq">Guardando páginas… ${hechas} de ${archivos.length}</p>${barra((hechas / archivos.length) * 100)}`;
+    const fotos = [], pequenas = [];
+    for (const f of grupo) {
+      try {
+        fotos.push(await comprimir(f));
+        pequenas.push(await aBase64(await comprimir(f, 1200)));
+      } catch (e) {
+        aviso(e.message);
+      }
+    }
+    let numeros = [];
+    try {
+      numeros = (await IA.numerarPaginas(pequenas)).datos.paginas;
+    } catch (e) {
+      aviso(IA.traducirError(e));
+    }
+    fotos.forEach((foto, k) => {
+      const n = numeros.find((x) => x.foto === k + 1);
+      const p = { foto, num: n?.visible && n.numero > 0 ? n.numero : null, doble: !!n?.doble };
+      if (!p.num) sinNumero++;
+      const igual = p.num ? l.paginas.findIndex((x) => x.num === p.num) : -1;
+      if (igual >= 0) l.paginas[igual] = p;
+      else l.paginas.push(p);
+    });
+    hechas += grupo.length;
+    await Almacen.libros.guardar(l);
+  }
+  aviso(sinNumero ? `Guardadas. ${sinNumero} sin número: tócalas para ponérselo` : `${hechas} fotos guardadas ✅`);
+  pintar();
+}
+
+function temaDeLibro() {
+  const l = libroVisible, d = parseInt($("#pag-desde").value, 10), h = parseInt($("#pag-hasta").value, 10) || d;
+  if (!d) return aviso("Pon desde qué página");
+  const [a, b] = d <= h ? [d, h] : [h, d];
+  const sel = l.paginas.filter((p) => p.num && p.num <= b && hastaPag(p) >= a);
+  if (!sel.length) return aviso(`No tengo guardada ninguna página entre la ${a} y la ${b}`);
+  if (sel.length > MAX_FOTOS) return aviso(`Son ${sel.length} fotos y el máximo por tema es ${MAX_FOTOS}. Divídelo en dos temas.`);
+  const faltan = [];
+  for (let n = a; n <= b; n++) if (!sel.some((p) => n >= p.num && n <= hastaPag(p))) faltan.push(n);
+  if (faltan.length && !confirm(`No tengo guardadas las páginas ${faltan.join(", ")}. ¿Creo el tema sin ellas?`)) return;
+  const examen = borrador?.examenId ? { examenId: borrador.examenId, para: borrador.para, fecha: borrador.fecha, notas: borrador.notas } : {};
+  borrador = {
+    traducir: false, fotos: sel.map((p) => p.foto), objetivo: "examen", idioma: "Español", fecha: "", notas: "", ...examen,
+    deLibro: `${l.titulo}, páginas ${a}-${b}`, contextoLibro: `Libro: ${l.titulo}${l.editorial ? ` (${l.editorial})` : ""}, páginas ${a} a ${b}.`,
+  };
+  ir("#/nuevo");
+}
+
+// ---------- Modo concentración ----------
+let foco = null;
+let audio = null;
+const minutosHoy = () => { const m = leerJSON("repasa:focoHoy", {}); return m.fecha === hoyISO() ? m.min : 0; };
+function sonar() {
+  try {
+    audio ||= new (window.AudioContext || window.webkitAudioContext)();
+    [0, 0.3, 0.6].forEach((t) => {
+      const o = audio.createOscillator(), g = audio.createGain(), t0 = audio.currentTime + t;
+      o.frequency.value = 880;
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.exponentialRampToValueAtTime(0.35, t0 + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.25);
+      o.connect(g).connect(audio.destination);
+      o.start(t0);
+      o.stop(t0 + 0.27);
+    });
+    navigator.vibrate?.(400);
+  } catch {}
+}
+
+function pintarConcentrar() {
+  if (!foco) {
+    app.innerHTML = `${cabecera("Concentrarme")}
+      <div class="caja"><p>Estudia a tope un rato y luego descansa. Es la forma de rendir más sin agotarte.</p>
+        <ul><li>Pon el móvil en <b>No molestar</b> 🌙</li><li>Deja esta pantalla abierta: te aviso con un sonido</li><li>Ten delante lo que vas a estudiar</li></ul></div>
+      <div class="opciones">
+        <button class="opcion" data-a="foco" data-e="25" data-d="5"><span>⏱️</span>25 + 5<small class="peq">25 min estudiando, 5 de descanso</small></button>
+        <button class="opcion" data-a="foco" data-e="45" data-d="10"><span>🔥</span>45 + 10<small class="peq">Para las tardes de examen</small></button>
+      </div>
+      <p class="peq centro">Hoy llevas ${minutosHoy()} minutos de concentración.</p>`;
+    return;
+  }
+  app.innerHTML = `<div class="foco ${foco.fase}">
+    <div class="foco-fase">${foco.fase === "estudio" ? "Estudiando" : "Descanso"}</div>
+    <div class="foco-reloj"><svg viewBox="0 0 120 120"><circle cx="60" cy="60" r="54" class="anillo-fondo"/><circle cx="60" cy="60" r="54" class="anillo" id="anillo"/></svg><div class="foco-tiempo" id="foco-tiempo">--:--</div></div>
+    <p class="foco-texto">${foco.fase === "estudio" ? "Nada de móvil hasta que suene 🙂" : "Levántate, bebe agua y estira. Ahora sí puedes mirar el móvil."}</p>
+    <div class="foco-bloques">Bloques terminados: <b>${foco.bloques}</b> · hoy ${minutosHoy()} min</div>
+    <div class="fila centrada"><button class="btn sec" data-a="foco-pausa">${foco.restante != null ? "▶️ Seguir" : "⏸️ Pausa"}</button><button class="btn sec" data-a="foco-fin">Terminar</button></div>
+  </div>`;
+  tickFoco();
+}
+
+function tickFoco() {
+  if (!foco) return;
+  const total = (foco.fase === "estudio" ? foco.estudio : foco.descanso) * 60000;
+  const queda = foco.restante ?? Math.max(0, foco.fin - Date.now());
+  const t = $("#foco-tiempo"), a = $("#anillo");
+  if (t) {
+    const s = Math.ceil(queda / 1000), L = 2 * Math.PI * 54;
+    t.textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+    a.style.strokeDasharray = L;
+    a.style.strokeDashoffset = L * (1 - queda / total);
+  }
+  if (foco.restante == null && queda <= 0) finFase();
+}
+
+function finFase() {
+  sonar();
+  if (foco.fase === "estudio") {
+    foco.bloques++;
+    const m = leerJSON("repasa:focoHoy", {});
+    ls.set("repasa:focoHoy", JSON.stringify({ fecha: hoyISO(), min: (m.fecha === hoyISO() ? m.min : 0) + foco.estudio }));
+    actividad("concentracion");
+    foco.fase = "descanso";
+    aviso("¡Bloque terminado! Toca descansar 🙌");
+  } else {
+    foco.fase = "estudio";
+    aviso("Fin del descanso: ¡a por otro bloque!");
+  }
+  foco.fin = Date.now() + (foco.fase === "estudio" ? foco.estudio : foco.descanso) * 60000;
+  if (location.hash === "#/concentrar") pintarConcentrar();
+}
+
+async function empezarFoco(estudio, descanso) {
+  audio ||= new (window.AudioContext || window.webkitAudioContext)(); // se activa con el toque para poder sonar luego
+  audio.resume?.();
+  let bloqueo = null;
+  try { bloqueo = await navigator.wakeLock?.request("screen"); } catch {}
+  foco = { estudio, descanso, fase: "estudio", fin: Date.now() + estudio * 60000, restante: null, bloques: 0, bloqueo, reloj: setInterval(tickFoco, 500) };
+  pintarConcentrar();
+}
+
 // ---------- Guía de bienvenida ----------
 const GUIA = [
   ["👋", "¡Bienvenida a Repasa!", "Es como tener un profe particular en el móvil. Haces fotos a tus apuntes y te lo preparo todo para que te lo sepas y apruebes."],
   ["📸", "1. Haz fotos", "Pulsa «Nuevo tema» y haz una foto a cada página (recta y con luz). Dime si es para un examen, un test o una presentación. En 1-3 minutos está listo: mientras, no cierres la app."],
   ["🪜", "2. Sigue los 3 pasos", "Cada tema tiene 3 pasos: Entiéndelo (resumen, esquema) → Apréndetelo (tarjetas, test) → Ponte a prueba (preguntas con nota, simulacro). Si no sabes qué hacer, pulsa «Te toca ahora»."],
-  ["🔥", "3. Un poquito cada día", "Haz el «Repaso de hoy»: son 10 minutos y así no se te olvida nada. Sumas días de racha, consigues logros… y los premios de Eduardo 🎁."],
-  ["💡", "Trucos", "Para inglés o francés, «Traducir con fotos». Para tus deberes, «Corregir un ejercicio». Si no entiendes algo, pregúntalo en «Dudas». Y si algo te choca, compruébalo en el libro: la IA también se puede equivocar."],
+  ["🔥", "3. Un poquito cada día", "Haz el «Repaso de hoy»: son 10 minutos y así no se te olvida nada. Usa «🎯 Concentrarme» para estudiar sin distracciones. Cada día que estudias suma a tu racha 🔥."],
+  ["💡", "Trucos", "Apunta cada examen en cuanto te lo digan y te aviso con tiempo. Guarda tus libros en «Mis libros» y luego solo eliges las páginas. Para inglés o francés, «Traducir con fotos». Y si algo te choca, compruébalo en el libro: la IA también se puede equivocar."],
 ];
 function pintarGuia(n) {
   const [icono, titulo, texto] = GUIA[n], ultima = n === GUIA.length - 1;
@@ -1224,7 +1463,7 @@ function pintarLogros() {
   app.innerHTML = `${cabecera("Mis logros")}
     <div class="caja destacada centro"><div class="emoji">🔥</div><h2>${r} día${r === 1 ? "" : "s"} seguido${r === 1 ? "" : "s"}</h2><p class="peq">Cuenta cada día que repasas tarjetas, haces un test o te corrijo algo. ¡No la rompas!</p></div>
     <div class="logros">${LOGROS.map((l) => `<div class="logro ${tengo.includes(l.id) ? "" : "bloqueado"}"><span class="emoji">${l.icono}</span><b>${l.nombre}</b><small>${l.desc}</small></div>`).join("")}</div>
-    <div class="caja"><div class="etq">Tus números</div><p>📸 ${s.temas || 0} temas · 🃏 ${s.tarjetas || 0} tarjetas · ✅ ${s.tests || 0} tests · ✍️ ${s.correcciones || 0} correcciones · ⏱️ ${s.simulacros || 0} simulacros · 🎙️ ${s.orales || 0} orales</p></div>`;
+    <div class="caja"><div class="etq">Tus números</div><p>📸 ${s.temas || 0} temas · 🃏 ${s.tarjetas || 0} tarjetas · ✅ ${s.tests || 0} tests · ✍️ ${s.correcciones || 0} correcciones · ⏱️ ${s.simulacros || 0} simulacros · 🎙️ ${s.orales || 0} orales · 🎯 ${s.concentracion || 0} bloques de concentración</p></div>`;
 }
 
 // ---------- Ajustes ----------
@@ -1277,10 +1516,6 @@ function zonaEduardo() {
       <input id="aj-clave" type="password" autocomplete="off" value="${esc(IA.clave())}" placeholder="sk-ant-…">
       <label class="etq" for="aj-mensaje">💌 Mensaje para ella <span class="opc">(sale en su pantalla de inicio)</span></label>
       <textarea id="aj-mensaje" rows="2" placeholder="Ej.: ¡Mucho ánimo con el examen de mates! Confío en ti 💪">${esc(ls.get("repasa:mensaje") || "")}</textarea>
-      <div class="etq">🎁 Premios <span class="opc">(lo que le das si lo consigue; deja el texto vacío para quitarlo)</span></div>
-      ${[0, 1, 2].map((i) => { const x = leerJSON("repasa:premios", [])[i] || { tipo: "racha", meta: 7, texto: "" }; return `<div class="premio-edit">
-        <input id="pr-texto-${i}" value="${esc(x.texto)}" placeholder="${["Ej.: Te invito a un helado 🍦", "Ej.: Elegimos peli el sábado 🍿", "Ej.: 10 € para lo que quieras"][i]}">
-        <div class="fila"><select id="pr-tipo-${i}">${Object.entries(META_PREMIO).map(([k, m]) => `<option value="${k}" ${x.tipo === k ? "selected" : ""}>${m.nombre}</option>`).join("")}</select><input id="pr-meta-${i}" type="number" min="1" step="0.5" inputmode="decimal" value="${esc(x.meta)}"></div></div>`; }).join("")}
       <label class="etq" for="aj-limite-dia">Temas nuevos al día como máximo <span class="opc">(0 = sin límite)</span></label>
       <input id="aj-limite-dia" type="number" min="0" inputmode="numeric" value="${esc(ls.get("repasa:limiteDia") ?? 8)}">
       <label class="etq" for="aj-limite-mes">Gasto máximo al mes en $ <span class="opc">(0 = sin límite)</span></label>
@@ -1303,13 +1538,66 @@ function zonaEduardo() {
 
 // ---------- Eventos ----------
 const ACCIONES = {
+  "editar-libro": async () => {
+    const l = libroVisible, t = prompt("Nombre del libro:", l.titulo);
+    if (t === null) return;
+    const a = prompt("Asignatura:", l.asignatura || "");
+    Object.assign(l, { titulo: t.trim() || l.titulo, asignatura: (a ?? l.asignatura).trim() });
+    await Almacen.libros.guardar(l);
+    pintar();
+  },
+  "pagina-libro": async (b) => {
+    const l = libroVisible, p = l.paginas[+b.dataset.i];
+    const v = prompt("Número de página (déjalo vacío para borrar esta foto):", p.num || "");
+    if (v === null) return;
+    if (!v.trim()) {
+      if (!confirm("¿Borrar esta foto del libro?")) return;
+      l.paginas.splice(+b.dataset.i, 1);
+    } else {
+      const n = parseInt(v, 10);
+      if (!n) return aviso("Escribe solo el número");
+      const otra = l.paginas.findIndex((x, i) => x.num === n && i !== +b.dataset.i);
+      if (otra >= 0 && !confirm(`Ya tienes la página ${n}. ¿Cambio la vieja por esta?`)) return;
+      p.num = n;
+      p.doble = false;
+      if (otra >= 0) l.paginas.splice(otra, 1);
+    }
+    await Almacen.libros.guardar(l);
+    pintar();
+  },
+  "borrar-libro": async () => {
+    if (!confirm("¿Borrar este libro y todas sus páginas? Los temas que ya creaste no se borran.")) return;
+    await Almacen.libros.borrar(libroVisible.id);
+    ir("#/libros");
+  },
+  "tema-de-libro": temaDeLibro,
+  foco: (b) => empezarFoco(+b.dataset.e, +b.dataset.d),
+  "foco-pausa": () => {
+    if (foco.restante != null) (foco.fin = Date.now() + foco.restante), (foco.restante = null);
+    else foco.restante = Math.max(0, foco.fin - Date.now());
+    pintarConcentrar();
+  },
+  "foco-fin": () => {
+    if (!confirm("¿Terminar la sesión de concentración?")) return;
+    clearInterval(foco.reloj);
+    foco.bloqueo?.release?.().catch(() => {});
+    aviso(foco.bloques ? `¡Buen trabajo! ${foco.bloques} bloque${foco.bloques === 1 ? "" : "s"} hoy 💪` : "Sesión terminada");
+    foco = null;
+    pintarConcentrar();
+  },
+  "soltar-examen": () => { Object.assign(borrador, { examenId: null, para: "" }); pintarNuevo(borrador.traducir); },
+  "borrar-examen": (b) => {
+    if (!confirm("¿Quitar este examen de la lista?")) return;
+    ls.set("repasa:examenes", JSON.stringify(leerJSON("repasa:examenes", []).filter((x) => x.id !== b.dataset.id)));
+    pintar();
+  },
   "fin-guia": () => { ls.set("repasa:guiaVista", "1"); ir("#/"); },
   "cerrar-instalar": () => { ls.set("repasa:sinInstalar", "1"); pintar(); },
   objetivo: (b) => { borrador.objetivo = b.dataset.k; guardarCamposBorrador(); pintarNuevo(false); },
   "quitar-foto": (b) => { borrador.fotos.splice(+b.dataset.i, 1); guardarCamposBorrador(); pintarNuevo(borrador.traducir); },
   "mover-foto": (b) => { const i = +b.dataset.i, f = borrador.fotos; [f[i - 1], f[i]] = [f[i], f[i - 1]]; guardarCamposBorrador(); pintarNuevo(borrador.traducir); },
   crear,
-  reintentar: () => generar(temaVisible),
+  reintentar: () => (trabajando ? aviso("Espera a que termine el tema que se está preparando") : generar(temaVisible)),
   "borrar-tema": async () => {
     if (!confirm("¿Seguro que quieres borrar este tema? No se puede deshacer.")) return;
     await Almacen.borrar(temaVisible.id);
@@ -1499,6 +1787,13 @@ document.addEventListener("change", (e) => {
 document.addEventListener("submit", async (e) => {
   e.preventDefault();
   const f = e.target.dataset.f;
+  if (f === "examen") {
+    const e = { id: nuevoId(), asignatura: $("#ex-asig").value.trim(), fecha: $("#ex-fecha").value, que: $("#ex-que").value.trim() };
+    if (!e.asignatura || !e.fecha) return aviso("Pon la asignatura y la fecha");
+    ls.set("repasa:examenes", JSON.stringify([...leerJSON("repasa:examenes", []), e]));
+    aviso(`Apuntado: ${e.asignatura}, ${fechaBonita(e.fecha)}`);
+    return pintar();
+  }
   if (f === "nombre") {
     const n = $("#nom").value.trim();
     if (n) ls.set("repasa:nombre", n);
@@ -1515,7 +1810,6 @@ document.addEventListener("submit", async (e) => {
   } else if (f === "eduardo") {
     IA.ponerClave($("#aj-clave").value);
     ls.set("repasa:mensaje", $("#aj-mensaje").value.trim());
-    ls.set("repasa:premios", JSON.stringify([0, 1, 2].map((i) => ({ texto: $(`#pr-texto-${i}`).value.trim(), tipo: $(`#pr-tipo-${i}`).value, meta: Math.max(1, parseFloat($(`#pr-meta-${i}`).value) || 1) })).filter((x) => x.texto)));
     ls.set("repasa:limiteDia", String(Math.max(0, parseInt($("#aj-limite-dia").value, 10) || 0)));
     ls.set("repasa:limiteMes", String(Math.max(0, parseFloat($("#aj-limite-mes").value) || 0)));
     const pin = $("#aj-pin").value.trim();

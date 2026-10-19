@@ -340,6 +340,39 @@ Cada uno con una «pista» que ayude sin dar la respuesta y la «solucion» comp
     return { datos, coste };
   }
 
+  // ---------- Mis libros: reconocer la portada y numerar las páginas ----------
+  const ESQUEMA_LIBRO = obj({ titulo: txt, asignatura: txt, editorial: txt, curso: txt });
+  async function identificarLibro(portada) {
+    return pedirJSON(
+      {
+        max_tokens: 4000,
+        system: "Identifica un libro de texto escolar español por la foto de su portada. Devuelve el título tal como aparece, la asignatura con su nombre oficial en España (por ejemplo «Biología y Geología», «Lengua Castellana y Literatura», «Geografía e Historia»), la editorial y el curso (por ejemplo «3.º ESO»). Si algo no se ve en la portada, déjalo vacío: no lo inventes.",
+        messages: [{ role: "user", content: [{ type: "image", source: { type: "base64", media_type: "image/jpeg", data: portada } }, { type: "text", text: "¿Qué libro es?" }] }],
+      },
+      ESQUEMA_LIBRO,
+      "low"
+    );
+  }
+
+  const ESQUEMA_NUMEROS = obj({ paginas: lista(obj({ foto: { type: "integer" }, numero: { type: "integer" }, doble: { type: "boolean" }, visible: { type: "boolean" } })) });
+  async function numerarPaginas(fotos) {
+    const contenido = [];
+    fotos.forEach((data, i) => {
+      contenido.push({ type: "text", text: `Foto ${i + 1}:` });
+      contenido.push({ type: "image", source: { type: "base64", media_type: "image/jpeg", data } });
+    });
+    contenido.push({ type: "text", text: "Lee el número de página de cada foto." });
+    return pedirJSON(
+      {
+        max_tokens: 8000,
+        system: "Te pasan fotos de páginas de un libro de texto. Para cada foto (en el mismo orden, «foto» empieza en 1) lee el número de página impreso (suele estar en una esquina de arriba o de abajo). Si en la foto salen dos páginas (el libro abierto), da el número de la de la izquierda y pon «doble» en true. Si el número no se ve o no se puede leer con seguridad, pon «visible» en false y «numero» en 0. No lo deduzcas por el orden de las fotos: solo lo que se lee.",
+        messages: [{ role: "user", content: contenido }],
+      },
+      ESQUEMA_NUMEROS,
+      "low"
+    );
+  }
+
   async function probarClave() {
     await cliente().models.retrieve(MODELO);
   }
@@ -360,7 +393,7 @@ Cada uno con una «pista» que ayude sin dar la respuesta y la «solucion» comp
 
   return {
     hacerTema, corregir, explicar, charlar, probarClave, traducirError, gasto,
-    corregirFoto, ejerciciosParecidos, corregirOral, corregirSimulacro, combinar, limiteMes,
+    corregirFoto, ejerciciosParecidos, corregirOral, corregirSimulacro, combinar, limiteMes, identificarLibro, numerarPaginas,
     tieneClave: () => !!clave(),
     clave,
     ponerClave: (k) => ls.set("repasa:clave", k.trim()),
