@@ -259,7 +259,7 @@ async function pintarInicio() {
         <span class="nombre-tema">${t.objetivo === "traducir" ? "🌍 " : ""}${esc(t.resumen?.titulo || `${t.fotos.length} foto${t.fotos.length === 1 ? "" : "s"}`)}<small>${t.resumen ? `Lo dominas al ${dominio(t)}%` : trabajando?.id === t.id ? "La IA está con ello…" : "No se terminó: toca para reintentar"}</small>${t.resumen ? barra(dominio(t)) : ""}</span><span class="flecha">›</span>
       </a>`).join("")}`).join("")}
     ${conTema.length >= 2 ? `<a class="enlace-pie" href="#/combinar">🧩 ¿Un examen con varios temas? Júntalos en uno</a>` : ""}
-    ${!temas.length ? `<div class="vacio"><p>Aún no tienes temas.</p><p>Haz fotos a las páginas que entran y te preparo el resumen, el esquema, un test, tarjetas para memorizar y las preguntas que pueden caer, con corrección.</p></div>` : ""}`;
+    ${!temas.length ? `<div class="vacio"><p><b>Aún no tienes temas.</b></p><p>Pulsa <b>📸 Nuevo tema</b> y haz fotos a las páginas que entran.</p></div>` : ""}`;
 }
 
 // ---------- Nuevo tema ----------
@@ -281,7 +281,7 @@ function pintarNuevo(traducir, examenId) {
     ${b.deLibro ? `<div class="caja suave fila-para"><span>📚 ${esc(b.deLibro)}</span></div>` : ""}
     <div class="caja">
       <div class="etq">1. ${traducir ? "Haz foto al texto" : "Haz fotos a las páginas"}</div>
-      <p class="peq">Una foto por página, recta, con luz y la página entera. Por orden. Hasta ${MAX_FOTOS}.</p>
+      <p class="peq">Una por página, recta y con luz. En orden.</p>
       ${b.fotos.length ? `<div class="fotos">${b.fotos.map((f, i) => `<div class="foto"><img src="${verFoto(f)}" alt="Página ${i + 1}"><span class="num">${i + 1}</span><button class="quitar" data-a="quitar-foto" data-i="${i}" aria-label="Quitar">✕</button>${i ? `<button class="mover" data-a="mover-foto" data-i="${i}" aria-label="Mover antes">◀</button>` : ""}</div>`).join("")}</div>` : ""}
       <div class="fila">
         <label class="btn" for="cam">📷 Hacer foto</label>
@@ -291,19 +291,20 @@ function pintarNuevo(traducir, examenId) {
       <input type="file" id="gal" accept="image/*" multiple data-fotos="borrador" hidden>
       <div id="cargando-fotos"></div>
     </div>
-    ${traducir ? `<div class="caja">${selectorIdioma("idioma", b.idioma, "2. ¿A qué idioma lo traduzco?")}<p class="peq">Te hago la traducción completa, el vocabulario importante y el resumen con test y tarjetas, todo en ese idioma.</p></div>` : `
+    ${traducir ? `<div class="caja">${selectorIdioma("idioma", b.idioma, "2. ¿A qué idioma lo traduzco?")}<p class="peq">Traducción completa + vocabulario + resumen, test y tarjetas.</p></div>` : `
     <div class="caja">
       <div class="etq">2. ¿Para qué lo necesitas?</div>
       <div class="opciones">${Object.entries(OBJETIVOS).map(([k, o]) => `<button class="opcion ${b.objetivo === k ? "activa" : ""}" data-a="objetivo" data-k="${k}"><span>${o.icono}</span>${o.nombre}</button>`).join("")}</div>
       ${selectorIdioma("idioma", b.idioma, "Idioma del resumen")}
     </div>`}
     <div class="caja">
-      <label class="etq" for="fecha">3. ¿Cuándo es el examen o la entrega? <span class="opc">(opcional)</span></label>
+      <label class="etq" for="fecha">3. ¿Cuándo es el examen? <span class="opc">(opcional)</span></label>
       <input type="date" id="fecha" min="${hoyISO()}" value="${esc(b.fecha)}">
-      <label class="etq" for="notas">¿Algo que haya dicho el profe? <span class="opc">(opcional)</span></label>
-      <textarea id="notas" rows="3" placeholder="${traducir ? "Ej.: es para el examen de inglés, céntrate en los verbos…" : "Ej.: entra hasta la página 54, pregunta mucho las fechas, la presentación dura 5 minutos…"}">${esc(b.notas)}</textarea>
+      <label class="etq" for="notas">¿Algo que dijo el profe? <span class="opc">(opcional)</span></label>
+      <textarea id="notas" rows="2" placeholder="${traducir ? "Ej.: céntrate en los verbos" : "Ej.: entra hasta la página 54"}">${esc(b.notas)}</textarea>
     </div>
     <button class="btn enorme" data-a="crear" ${b.fotos.length ? "" : "disabled"}>✨ ${traducir ? "Traducir y resumir" : "Crear mi material de estudio"}</button>
+    ${b.fotos.length ? "" : `<p class="peq centro">👆 Primero haz al menos una foto.</p>`}
     ${!IA.tieneClave() ? `<p class="peq centro">Antes hay que poner la clave de la IA en <a href="#/ajustes">Ajustes</a>.</p>` : ""}`;
 }
 
@@ -436,7 +437,7 @@ function pintarTrabajando(t) {
       <h2 id="fase">Leyendo tus páginas…</h2>
       ${barra(0)}
       <ul class="fases" id="fases"></ul>
-      <p class="peq centro">Tarda entre 1 y 3 minutos. <b>No cierres la app ni bloquees el móvil</b> hasta que termine.</p>
+      <p class="peq centro">Tarda 1 o 2 minutos.<br><b>No cierres la app ni bloquees el móvil.</b></p>
     </div>`;
   const FASES = t.objetivo === "traducir"
     ? ["Leyendo el texto", "Traduciendo", "Sacando el vocabulario", "Haciendo el resumen", "Preparando test y tarjetas"]
@@ -547,11 +548,11 @@ const PANELES = {
     z.innerHTML = `
       ${r.lectura.avisos.length && !r.traduccion.length ? `<div class="caja aviso"><b>Ojo con tus fotos</b>${lista(r.lectura.avisos)}</div>` : ""}
       <div class="caja destacada"><div class="etq">En 30 segundos</div><p class="grande">${md(r.en_30_segundos)}</p>
+        ${r.por_que_importa ? `<p class="lo-que-cae">🎯 ${md(r.por_que_importa)}</p>` : ""}
         <button class="btn sec peq no-imprimir" data-a="escuchar" data-que="resumen">🔊 Escuchar el resumen</button></div>
-      ${r.por_que_importa ? `<div class="caja"><div class="etq">¿Para qué sirve esto?</div><p>${md(r.por_que_importa)}</p></div>` : ""}
       ${r.apartados.map((a, i) => `
         <article class="caja apartado">
-          <div class="ap-cab"><h2>${i + 1}. ${md(a.titulo)}</h2>${a.paginas ? `<span class="pag">${esc(a.paginas)}</span>` : ""}</div>
+          <div class="ap-cab"><h2>${i + 1}. ${md(a.titulo.replace(/^\s*\d+[.)]\s*/, ""))}</h2>${a.paginas ? `<span class="pag">${esc(a.paginas)}</span>` : ""}</div>
           <ul class="ideas">${a.ideas.map((x) => `<li>${md(x)}</li>`).join("")}</ul>
           ${a.ejemplo ? `<div class="ejemplo"><div class="etq">Ejemplo</div>${mdBloque(a.ejemplo)}</div>` : ""}
           <div class="facil" id="facil-${i}">${t.facil?.[i] ? `<div class="etq">Más fácil</div>${mdBloque(t.facil[i])}` : ""}</div>
@@ -560,7 +561,7 @@ const PANELES = {
       ${r.datos_clave.length ? `<h2 class="titulo-sec">Datos que hay que saberse</h2><div class="caja">${Object.entries(grupos).map(([tipo, ds]) => ds.map((d) => `<div class="dato"><span class="icono">${ICONO_DATO[tipo] || "📌"}</span><div><b>${md(d.dato)}</b>${d.explicacion ? `<small>${md(d.explicacion)}</small>` : ""}</div></div>`).join("")).join("")}</div>` : ""}
       ${r.trucos_memoria.length ? `<h2 class="titulo-sec">Trucos para memorizar</h2>${r.trucos_memoria.map((x) => `<div class="caja truco"><div class="etq">${md(x.para)}</div><p>${md(x.truco)}</p></div>`).join("")}` : ""}
       ${r.errores_tipicos.length ? `<h2 class="titulo-sec">Cuidado con esto</h2><div class="caja cuidado">${lista(r.errores_tipicos)}</div>` : ""}
-      ${r.fuera_del_libro.length ? `<div class="caja suave"><div class="etq">Esto lo añado yo (no está en tus páginas)</div>${lista(r.fuera_del_libro)}<p class="peq">Úsalo para entender, pero comprueba con tu profe si entra.</p></div>` : ""}
+      ${r.fuera_del_libro.length ? `<details class="caja suave plegable"><summary>➕ Extra (no viene en tu libro)</summary>${lista(r.fuera_del_libro)}<p class="peq">Para entenderlo mejor. Pregunta al profe si entra.</p></details>` : ""}
       <button class="btn sec no-imprimir" data-a="imprimir">🖨️ Guardar en PDF o imprimir</button>`;
   },
 
@@ -588,7 +589,7 @@ const PANELES = {
     z.innerHTML = `<div class="caja centro">
       <div class="emoji">🃏</div>
       <h2>${hoy.length ? `${hoy.length} tarjeta${hoy.length === 1 ? "" : "s"} para hoy` : "Por hoy, todo repasado"}</h2>
-      <p class="peq">Dominas ${dominadas} de ${r.tarjetas.length}. Las que te sabes vuelven a salir más tarde; las que no, enseguida.</p>
+      <p class="peq">Te sabes ${dominadas} de ${r.tarjetas.length}.</p>
       ${barra((dominadas / Math.max(1, r.tarjetas.length)) * 100)}
       <div class="fila centrada">${hoy.length ? `<button class="btn" data-a="empezar-tarjetas" data-todas="0">Empezar</button>` : ""}<button class="btn sec" data-a="empezar-tarjetas" data-todas="1">Repasar todas</button></div>
     </div>`;
@@ -599,24 +600,27 @@ const PANELES = {
     z.innerHTML = `<div class="caja centro">
       <div class="emoji">✅</div>
       <h2>Test de ${n} preguntas</h2>
-      ${p ? `<p>Tu mejor nota: <b>${(p.mejor / 10).toFixed(1).replace(".", ",")}</b> · la última: ${(p.ultima / 10).toFixed(1).replace(".", ",")}</p>` : `<p class="peq">Contesta y te explico cada respuesta al momento.</p>`}
+      ${p ? `<p>Tu mejor nota: <b>${(p.mejor / 10).toFixed(1).replace(".", ",")}</b> · la última: ${(p.ultima / 10).toFixed(1).replace(".", ",")}</p>` : `<p class="peq">Te explico cada respuesta al momento.</p>`}
       <div class="fila centrada"><button class="btn" data-a="empezar-test">${p ? "Hacerlo otra vez" : "Empezar"}</button>${p?.falladas?.length ? `<button class="btn sec" data-a="empezar-test" data-falladas="1">Solo las ${p.falladas.length} que fallé</button>` : ""}</div>
     </div>`;
   },
 
   examen(z, t) {
-    const p = t.progreso.preguntas;
-    z.innerHTML = `<p class="intro">Escribe tu respuesta como en el examen y te la corrijo con nota. Las <span class="badge alta">Muy probable</span> son las que más pueden caer.</p>
-      ${t.resumen.preguntas_examen.map((q, i) => {
+    const p = t.progreso.preguntas, qs = t.resumen.preguntas_examen;
+    // Una pregunta abierta cada vez: la última que tocó o la primera sin contestar
+    if (preguntaAbierta?.tema !== t.id) preguntaAbierta = { tema: t.id, i: Math.max(0, qs.findIndex((_, i) => p[i]?.nota == null)) };
+    const hechas = qs.filter((_, i) => p[i]?.nota != null).length;
+    z.innerHTML = `<p class="intro">Toca una pregunta, escribe sin mirar y pulsa <b>Corregir</b>. Llevas ${hechas} de ${qs.length}.</p>
+      ${qs.map((q, i) => {
         const h = p[i] || {};
-        return `<article class="caja pregunta">
-          <div class="badges">${q.probabilidad === "muy_probable" ? `<span class="badge alta">Muy probable</span>` : ""}<span class="badge">${TIPO_PREGUNTA[q.tipo] || ""}</span>${h.nota != null ? `<span class="badge nota ${claseNota(h.nota)}">${h.nota}/10</span>` : ""}</div>
-          <h3>${md(q.pregunta)}</h3>
+        return `<details class="caja pregunta" id="preg-${i}" data-i="${i}" ${preguntaAbierta.i === i ? "open" : ""}>
+          <summary><div class="badges">${q.probabilidad === "muy_probable" ? `<span class="badge alta">Muy probable</span>` : ""}${h.nota != null ? `<span class="badge nota ${claseNota(h.nota)}">${h.nota}/10</span>` : `<span class="badge">Sin hacer</span>`}</div>
+          <h3>${i + 1}. ${md(q.pregunta)}</h3></summary>
           <textarea id="resp-${i}" data-resp="${i}" rows="4" placeholder="Tu respuesta…">${esc(h.respuesta || "")}</textarea>
           <div class="fila"><button class="btn" data-a="corregir" data-i="${i}">✨ Corregir</button><button class="btn sec" data-a="ver-modelo" data-i="${i}">Ver la respuesta de 10</button></div>
           <div id="corr-${i}">${h.correccion ? htmlCorreccion(h.correccion) : ""}</div>
           <div class="modelo oculto" id="mod-${i}"><div class="etq">Respuesta de 10</div>${mdBloque(q.respuesta_modelo)}${q.claves.length ? `<div class="etq">Lo que busca el profe</div>${lista(q.claves)}` : ""}</div>
-        </article>`;
+        </details>`;
       }).join("")}`;
   },
 
@@ -647,7 +651,7 @@ const PANELES = {
     if (simu?.t.id === t.id && simu.enCurso) return pintarSimulacro();
     const h = t.progreso.simulacros;
     z.innerHTML = `<div class="caja centro"><div class="emoji">⏱️</div><h2>Simulacro de examen</h2>
-        <p class="peq">Como el examen de verdad: con tiempo, sin mirar nada y con nota al final. Mezcla preguntas tipo test y preguntas para escribir.</p>
+        <p class="peq">Como el de verdad: con tiempo, sin mirar y con nota.</p>
         <div class="opciones">
           <button class="opcion" data-a="empezar-simulacro" data-modo="corto"><span>⚡</span>Corto<small class="peq">15 min · 5 de test + 2 para escribir</small></button>
           <button class="opcion" data-a="empezar-simulacro" data-modo="largo"><span>📝</span>Completo<small class="peq">30 min · 8 de test + 4 para escribir</small></button>
@@ -658,9 +662,9 @@ const PANELES = {
   ejercicios(z, t) {
     const DIF = { facil: "Fácil", media: "Media", dificil: "Difícil" };
     z.innerHTML = `
-      <div class="caja"><div class="etq">✏️ Corrige mi ejercicio</div><p class="peq">Haz foto a un ejercicio, problema o redacción que hayas hecho tú y te digo la nota, en qué paso fallas y cómo se hace bien.</p>
+      <div class="caja"><div class="etq">✏️ Corrige mi ejercicio</div><p class="peq">Foto a lo que has hecho → nota, en qué fallas y cómo se hace.</p>
         <div id="corrector">${htmlCorrector()}</div></div>
-      <div class="caja"><div class="etq">🧮 Ejercicios nuevos para practicar</div><p class="peq">Parecidos a los del libro y del examen, de fácil a difícil, con pista y solución.</p>
+      <div class="caja"><div class="etq">🧮 Ejercicios nuevos para practicar</div><p class="peq">Como los del libro, con pista y solución.</p>
         <button class="btn" data-a="ejercicios">${t.practica.length ? "Ponme 5 más" : "Ponme 5 ejercicios"}</button></div>
       ${t.practica.map((e, i) => `<article class="caja ejercicio"><div class="badges"><span class="badge ${e.dificultad}">${DIF[e.dificultad] || ""}</span><span class="badge">Ejercicio ${i + 1}</span></div>${mdBloque(e.enunciado)}
         <details><summary>💡 Ver pista</summary>${mdBloque(e.pista)}</details><details><summary>✅ Ver solución</summary>${mdBloque(e.solucion)}</details>
@@ -671,7 +675,7 @@ const PANELES = {
   oral(z, t) {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     z.innerHTML = `
-      <div class="caja"><p class="peq">Como en un examen oral: elige qué vas a explicar, habla y te digo qué tal lo has hecho.</p>
+      <div class="caja"><p class="peq">1. Elige qué vas a explicar · 2. Habla · 3. Corregir.</p>
         <select id="oral-parte">${["Todo el tema", ...t.resumen.apartados.map((a) => a.titulo.replace(/\*\*/g, ""))].map((x) => `<option>${esc(x)}</option>`).join("")}${t.resumen.presentacion.guion.length ? `<option value="__presentacion">Mi presentación</option>` : ""}</select>
         ${SR ? `<button class="btn" data-a="grabar">🎙️ Empezar a hablar</button>` : `<p class="peq">Toca el cuadro de abajo y pulsa el micrófono 🎤 del teclado para dictar.</p>`}
         <textarea id="oral-texto" rows="5" placeholder="Aquí aparece lo que vas diciendo…"></textarea>
@@ -837,13 +841,14 @@ async function terminarTest() {
 }
 
 // ---------- Examen ----------
+let preguntaAbierta = null;
 const htmlCorreccion = (c) => `<div class="correccion">
   <div class="nota-grande ${claseNota(c.nota)}">${c.nota}<small>/10</small></div>
-  ${c.bien.length ? `<div class="etq">Lo que está bien</div>${lista(c.bien)}` : ""}
-  ${c.falta.length ? `<div class="etq">Lo que falta para el 10</div>${lista(c.falta)}` : ""}
-  ${c.mal.length ? `<div class="etq">Errores</div>${lista(c.mal)}` : ""}
-  ${c.respuesta_mejorada ? `<div class="etq">Tu respuesta, mejorada</div>${mdBloque(c.respuesta_mejorada)}` : ""}
+  ${c.falta.length ? `<div class="etq">❗ Te falta para el 10</div>${lista(c.falta)}` : ""}
+  ${c.mal.length ? `<div class="etq">❌ Errores</div>${lista(c.mal)}` : ""}
+  ${c.bien.length ? `<div class="etq">✅ Bien</div>${lista(c.bien)}` : ""}
   ${c.consejo ? `<p class="consejo">💡 ${md(c.consejo)}</p>` : ""}
+  ${c.respuesta_mejorada ? `<details class="plegable"><summary>✨ Ver tu respuesta mejorada</summary>${mdBloque(c.respuesta_mejorada)}</details>` : ""}
 </div>`;
 
 async function corregir(boton, i) {
@@ -1454,11 +1459,11 @@ const htmlAyuda = (k, abierto) => {
     <summary><span class="emoji">${a.icono}</span><b>${esc(a.titulo)}</b></summary>
     <p class="ay-que">${md(a.que)}</p>
     ${a.utilidad ? `<div class="ay-bloque utilidad"><div class="etq">🎯 Para qué te sirve</div><p>${md(a.utilidad)}</p></div>` : ""}
-    ${a.cuando ? `<div class="ay-bloque"><div class="etq">🕒 Cuándo usarlo</div><p>${md(a.cuando)}</p></div>` : ""}
+    ${a.cuando ? `<p class="peq ay-cuando">🕒 <b>Cuándo:</b> ${md(a.cuando)}</p>` : ""}
     <div class="etq ay-etq">👣 Paso a paso</div>
     <ol class="ay-pasos">${a.pasos.map((p) => `<li>${md(p)}</li>`).join("")}</ol>
-    ${a.ejemplo ? `<div class="ay-bloque ejemplo"><div class="etq">📌 Un ejemplo</div><p>${md(a.ejemplo)}</p></div>` : ""}
     ${a.truco ? `<p class="consejo">💡 ${md(a.truco)}</p>` : ""}
+    ${a.ejemplo ? `<details class="plegable"><summary>📌 Ver un ejemplo</summary><p>${md(a.ejemplo)}</p></details>` : ""}
   </details>`;
 };
 
@@ -1491,11 +1496,11 @@ function filtrarAyuda(texto) {
 
 // ---------- Guía de bienvenida ----------
 const GUIA = [
-  ["👋", "¡Bienvenida a Repasa!", "Es como tener un profe particular en el móvil. Haces fotos a tus apuntes y te lo preparo todo para que te lo sepas y apruebes."],
-  ["📸", "1. Haz fotos", "Pulsa «Nuevo tema» y haz una foto a cada página (recta y con luz). Dime si es para un examen, un test o una presentación. En 1-3 minutos está listo: mientras, no cierres la app."],
-  ["🪜", "2. Sigue los 3 pasos", "Cada tema tiene 3 pasos: Entiéndelo (resumen, esquema) → Apréndetelo (tarjetas, test) → Ponte a prueba (preguntas con nota, simulacro). Si no sabes qué hacer, pulsa «Te toca ahora»."],
-  ["🔥", "3. Un poquito cada día", "Haz el «Repaso de hoy»: son 10 minutos y así no se te olvida nada. Usa «🎯 Concentrarme» para estudiar sin distracciones. Cada día que estudias suma a tu racha 🔥."],
-  ["❓", "Si te pierdes", "Arriba a la derecha de cada pantalla tienes un botón «?» que te explica esa parte paso a paso. Y en el inicio, el «?» abre la guía completa. Apunta cada examen en cuanto te lo digan y te aviso con tiempo. Guarda tus libros en «Mis libros» y luego solo eliges las páginas. Para inglés o francés, «Traducir con fotos». Y si algo te choca, compruébalo en el libro: la IA también se puede equivocar."],
+  ["👋", "¡Bienvenida a Repasa!", "Tu profe particular en el móvil. Haces fotos a tus apuntes y te lo preparo todo para aprobar."],
+  ["📸", "1. Haz fotos", "Pulsa «Nuevo tema» y haz una foto a cada página. En 1 o 2 minutos lo tienes listo (mientras, no cierres la app)."],
+  ["🪜", "2. Sigue los 3 pasos", "Entiéndelo → Apréndetelo → Ponte a prueba. ¿No sabes qué hacer? Pulsa «👉 Te toca ahora»."],
+  ["🔥", "3. Un poco cada día", "Haz el «🧠 Repaso de hoy»: unos minutos y no se te olvida nada. Cada día suma a tu racha 🔥."],
+  ["❓", "Si te pierdes", "Pulsa el botón «?» de arriba a la derecha: te explica esa pantalla paso a paso. Y si algo te suena raro, míralo en el libro."],
 ];
 function pintarGuia(n) {
   const [icono, titulo, texto] = GUIA[n], ultima = n === GUIA.length - 1;
@@ -1888,6 +1893,12 @@ document.addEventListener("submit", async (e) => {
     pintar();
   }
 });
+document.addEventListener("toggle", (e) => {
+  const d = e.target;
+  if (!d.matches?.("details.pregunta") || !d.open) return;
+  if (preguntaAbierta) preguntaAbierta.i = +d.dataset.i;
+  document.querySelectorAll("details.pregunta[open]").forEach((x) => x !== d && (x.open = false));
+}, true);
 document.addEventListener("input", (e) => {
   const el = e.target;
   if (el.dataset.simu != null && simu) simu.escritas[+el.dataset.simu].respuesta = el.value;

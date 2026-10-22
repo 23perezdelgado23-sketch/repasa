@@ -1,5 +1,5 @@
 // Repasa: con internet carga siempre la última versión publicada; sin internet, la última guardada.
-const CACHE = "repasa-20261022-194649";
+const CACHE = "repasa-20261022-200725";
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (e) =>
   e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k !== CACHE).map((k) => caches.delete(k)))).then(() => self.clients.claim()))
