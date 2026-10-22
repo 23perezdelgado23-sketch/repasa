@@ -129,7 +129,7 @@ const IA = (() => {
 
 Cómo trabajas:
 1. Lee TODAS las páginas con atención y en orden: títulos, texto, recuadros, definiciones en negrita, pies de foto, mapas, tablas, gráficos, ejercicios resueltos, actividades del final y lo que ella haya subrayado o escrito a mano. Lo resaltado por el libro o por ella es lo que más suele caer.
-2. Fidelidad total. Todo lo que pongas sale de sus páginas. No inventes datos, fechas, cifras, nombres ni fórmulas. Si para entender algo hace falta un dato que no está, ponlo en «fuera_del_libro» y no lo mezcles con el resumen. Si una parte no se lee bien, está cortada o parece que falta una página (el texto salta), dilo en «lectura.avisos» indicando la página.
+2. Fidelidad total. Todo lo que pongas sale de sus páginas. No inventes datos, fechas, cifras, nombres ni fórmulas. Si para entender algo hace falta un dato que no está, ponlo en «fuera_del_libro» y no lo mezcles con el resumen. Si una parte no se lee bien, está cortada o parece que falta una página (el texto salta), dilo en «lectura.avisos» indicando la página. «lectura.avisos» es SOLO para problemas reales de las fotos: si todo se lee bien, déjalo vacío (los consejos de estudio van en «por_que_importa»).
 3. Completo antes que corto. Lo que pueda caer en el examen tiene que estar. Se tiene que poder estudiar SOLO con tu material, sin volver al libro. Quita la paja, no el contenido.
 4. Lenguaje para 14 años: frases cortas, claras y directas, sin infantilizar. Mantén los términos técnicos exactos que pide el profesor y explícalos. Marca con **negrita** la palabra clave de cada idea (solo **negrita**: nada de títulos con #, tablas ni otro formato).
 5. Adapta el material a la asignatura:
@@ -141,7 +141,7 @@ Cómo trabajas:
 6. Preguntas de examen: las que pondría un profesor de 3.º de ESO con este material (las actividades del libro dan pistas). La «respuesta_modelo» es la que sacaría un 10: completa, bien estructurada y con el vocabulario correcto, del tamaño que se escribe en un examen real. En «claves», lo que el profesor busca para dar la puntuación completa.
 7. Test: preguntas de verdad (no obvias), 4 opciones, distractores creíbles, una sola correcta («correcta» es su posición: 0, 1, 2 o 3; varíala) y una explicación breve.
 8. Tarjetas: una idea por tarjeta. Frente corto (pregunta o término) y reverso breve.
-9. Trucos para memorizar: solo los que funcionen de verdad (siglas, frases, asociaciones, rimas, pequeñas historias). Mejor pocos y buenos.
+9. Trucos para memorizar: solo los que funcionen de verdad (siglas, frases, asociaciones, rimas, pequeñas historias). Mejor pocos y buenos. Un truco nunca puede apoyarse en un dato falso o dudoso (por ejemplo, sobre lo que significa una palabra en otro idioma): si no estás seguro, no lo uses.
 10. Errores típicos: las confusiones reales que tienen los alumnos con este tema.
 11. Presentación: rellénala solo si el objetivo es una presentación oral; si no, 0 minutos y listas vacías. El guion va en primera persona, natural, como hablaría ella, con una entrada que enganche y un cierre claro, ajustado a la duración que diga el profesor (si no la dice, 5 minutos). Añade consejos para exponer y las preguntas que le puede hacer el profesor, con su respuesta.
 12. Traducción: rellena «traduccion» y «vocabulario» solo si te lo piden. La traducción es completa y fiel, página a página, natural en el idioma de destino y conservando párrafos, listas y diálogos (usa saltos de línea). En «vocabulario», las palabras y expresiones útiles del texto original con su traducción y un ejemplo corto. En «idioma_original» pon el idioma de las fotos (por ejemplo «Inglés»). Si no te piden traducción, deja las dos listas vacías.
@@ -175,15 +175,30 @@ Escribe todo en el IDIOMA DEL MATERIAL que te indiquen (si no lo indican, españ
       "Prepárale su material.",
     ];
     contenido.push({ type: "text", text: lineas.filter(Boolean).join("\n") });
-    const { datos, coste } = await pedirJSON(
-      { system: SISTEMA_TEMA, max_tokens: op.objetivo === "traducir" ? 128000 : 64000, messages: [{ role: "user", content: contenido }] },
-      ESQUEMA_TEMA,
-      "high",
-      alTexto
-    );
+    return enDosPartes({ system: SISTEMA_TEMA, max_tokens: op.objetivo === "traducir" ? 128000 : 64000, messages: [{ role: "user", content: contenido }] }, alTexto);
+  }
+
+  // El esquema entero es demasiado grande para la API (lo rechaza): se pide en dos partes a la vez y se juntan.
+  const CAMPOS_PRACTICA = ["preguntas_examen", "test", "tarjetas", "presentacion"];
+  const parte = (practica) => obj(Object.fromEntries(Object.entries(ESQUEMA_TEMA.properties).filter(([k]) => CAMPOS_PRACTICA.includes(k) === practica)));
+  const ESQUEMA_CONTENIDO = parte(false), ESQUEMA_PRACTICA_TEMA = parte(true);
+  const PIDE_CONTENIDO = "En esta respuesta prepara SOLO la lectura, la traducción y el vocabulario (si tocan), el resumen, el esquema, los conceptos, los datos clave, los trucos, los errores típicos y lo que añades fuera del libro. Las preguntas de examen, el test, las tarjetas y la presentación te los pido aparte.";
+  const PIDE_PRACTICA = "En esta respuesta prepara SOLO las preguntas de examen, el test, las tarjetas y la presentación (vacía si no es una presentación oral). El resumen y lo demás te lo pido aparte, pero todo debe salir de este mismo material.";
+
+  async function enDosPartes(peticion, alTexto) {
+    const con = (extra) => {
+      const m = peticion.messages[0];
+      const content = Array.isArray(m.content) ? [...m.content, { type: "text", text: extra }] : `${m.content}\n\n${extra}`;
+      return { ...peticion, messages: [{ ...m, content }] };
+    };
+    const [a, b] = await Promise.all([
+      pedirJSON(con(PIDE_CONTENIDO), ESQUEMA_CONTENIDO, "high", alTexto),
+      pedirJSON({ ...con(PIDE_PRACTICA), max_tokens: 64000 }, ESQUEMA_PRACTICA_TEMA, "high", alTexto),
+    ]);
+    const datos = { ...a.datos, ...b.datos };
     // Quita preguntas de test mal formadas (sin 2 opciones o con la correcta fuera de rango)
     datos.test = (datos.test || []).filter((q) => q.opciones.length >= 2 && q.correcta >= 0 && q.correcta < q.opciones.length);
-    return { datos, coste };
+    return { datos, coste: a.coste + b.coste };
   }
 
   const resumenTexto = (r) =>
@@ -348,14 +363,7 @@ Cada uno con una «pista» que ayude sin dar la respuesta y la «solucion» comp
       op.notas ? `Lo que ha dicho el profesor o lo que pide ella: ${op.notas}` : "",
       ...temas.map((t, i) => `TEMA ${i + 1}:\n${JSON.stringify(t.resumen)}`),
     ];
-    const { datos, coste } = await pedirJSON(
-      { system: SISTEMA_TEMA, messages: [{ role: "user", content: lineas.filter(Boolean).join("\n\n") }] },
-      ESQUEMA_TEMA,
-      "high",
-      alTexto
-    );
-    datos.test = (datos.test || []).filter((q) => q.opciones.length >= 2 && q.correcta >= 0 && q.correcta < q.opciones.length);
-    return { datos, coste };
+    return enDosPartes({ system: SISTEMA_TEMA, max_tokens: 64000, messages: [{ role: "user", content: lineas.filter(Boolean).join("\n\n") }] }, alTexto);
   }
 
   // ---------- Mis libros: reconocer la portada y numerar las páginas ----------
