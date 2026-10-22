@@ -1446,22 +1446,47 @@ async function empezarFoco(estudio, descanso) {
 }
 
 // ---------- Guía completa («Cómo funciona») ----------
+const sinAcentos = (t) => String(t).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 const htmlAyuda = (k, abierto) => {
   const a = AYUDA[k];
-  return `<details class="caja ayuda" id="ay-${k}" ${abierto ? "open" : ""}><summary><span class="emoji">${a.icono}</span><b>${esc(a.titulo)}</b></summary>
-    <p>${md(a.que)}</p>
-    ${a.cuando ? `<p class="peq"><b>Cuándo:</b> ${md(a.cuando)}</p>` : ""}
-    <div class="etq">Cómo se hace</div>
-    <ol>${a.pasos.map((p) => `<li>${md(p)}</li>`).join("")}</ol>
+  const buscable = sinAcentos([a.titulo, a.que, a.utilidad, a.cuando, ...a.pasos, a.ejemplo, a.truco].filter(Boolean).join(" ").replace(/\*\*/g, ""));
+  return `<details class="caja ayuda" id="ay-${k}" data-buscar="${esc(buscable)}" ${abierto ? "open" : ""}>
+    <summary><span class="emoji">${a.icono}</span><b>${esc(a.titulo)}</b></summary>
+    <p class="ay-que">${md(a.que)}</p>
+    ${a.utilidad ? `<div class="ay-bloque utilidad"><div class="etq">🎯 Para qué te sirve</div><p>${md(a.utilidad)}</p></div>` : ""}
+    ${a.cuando ? `<div class="ay-bloque"><div class="etq">🕒 Cuándo usarlo</div><p>${md(a.cuando)}</p></div>` : ""}
+    <div class="etq ay-etq">👣 Paso a paso</div>
+    <ol class="ay-pasos">${a.pasos.map((p) => `<li>${md(p)}</li>`).join("")}</ol>
+    ${a.ejemplo ? `<div class="ay-bloque ejemplo"><div class="etq">📌 Un ejemplo</div><p>${md(a.ejemplo)}</p></div>` : ""}
     ${a.truco ? `<p class="consejo">💡 ${md(a.truco)}</p>` : ""}
   </details>`;
 };
+
 function pintarAyuda(k) {
   app.innerHTML = `${cabecera("Cómo funciona", "atras")}
-    <p class="intro">Toca cada apartado para ver qué es y cómo se usa. En cada pantalla tienes también un botón <b>?</b> arriba a la derecha que te trae justo a su explicación.</p>
-    ${GRUPOS_AYUDA.map(([g, ks]) => `<h2 class="titulo-sec">${g}</h2>${ks.map((x) => htmlAyuda(x, x === k || (!k && x === "metodo"))).join("")}`).join("")}
+    <p class="intro">Aquí tienes cada parte de la app explicada: qué es, para qué te sirve, cuándo usarla y cómo, paso a paso. En cada pantalla tienes también un botón <b>?</b> arriba a la derecha que te trae justo a su explicación.</p>
+    <div class="caja destacada"><div class="etq">Tu ruta para cada examen</div>
+      <div class="ruta">${RUTA_ESTUDIO.map(([icono, nombre, clave], n) => `<a class="ruta-paso" href="#/ayuda/${clave}"><span class="ruta-num">${n + 1}</span><span class="emoji">${icono}</span><small>${nombre}</small></a>`).join("")}</div>
+      <p class="peq">Toca cada paso para ver cómo se hace. Y cada día, sin falta: <a href="#/ayuda/repaso">🧠 Repaso de hoy</a>.</p></div>
+    <input id="buscar-ayuda" type="search" autocomplete="off" placeholder="🔍 ¿Qué quieres saber? (ej.: foto, tarjetas, saldo)">
+    <p id="ayuda-vacia" class="vacio oculto">No encuentro nada con esas palabras. Prueba con otras más sencillas.</p>
+    ${GRUPOS_AYUDA.map(([g, ks]) => `<section class="grupo-ayuda"><h2 class="titulo-sec">${g}</h2>${ks.map((x) => htmlAyuda(x, x === k || (!k && x === "metodo"))).join("")}</section>`).join("")}
     <a class="btn sec ancho" href="#/guia">Ver otra vez la bienvenida</a>`;
   if (k && AYUDA[k]) setTimeout(() => $(`#ay-${k}`)?.scrollIntoView({ block: "start" }), 60);
+}
+
+// El buscador de la guía: enseña y abre solo lo que tiene todas las palabras
+function filtrarAyuda(texto) {
+  const palabras = sinAcentos(texto).split(/\s+/).filter(Boolean);
+  let hay = 0;
+  document.querySelectorAll(".ayuda").forEach((d) => {
+    const ok = palabras.every((p) => d.dataset.buscar.includes(p));
+    d.classList.toggle("oculto", !ok);
+    if (palabras.length) d.open = ok;
+    hay += ok;
+  });
+  document.querySelectorAll(".grupo-ayuda").forEach((g) => g.classList.toggle("oculto", !g.querySelector(".ayuda:not(.oculto)")));
+  $("#ayuda-vacia").classList.toggle("oculto", hay > 0);
 }
 
 // ---------- Guía de bienvenida ----------
@@ -1867,6 +1892,7 @@ document.addEventListener("input", (e) => {
   const el = e.target;
   if (el.dataset.simu != null && simu) simu.escritas[+el.dataset.simu].respuesta = el.value;
   if (el.id === "cor-enunciado") enunciadoCorregir = el.value;
+  if (el.id === "buscar-ayuda") filtrarAyuda(el.value);
 });
 // Enviar la duda con Intro (Mayús+Intro hace salto de línea)
 document.addEventListener("keydown", (e) => {
