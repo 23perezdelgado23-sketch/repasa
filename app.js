@@ -1541,8 +1541,9 @@ function zonaEduardo() {
       <input id="aj-clave" type="password" autocomplete="off" value="${esc(IA.clave())}" placeholder="sk-ant-…">
       <label class="etq" for="aj-mensaje">💌 Mensaje para ella <span class="opc">(sale en su pantalla de inicio)</span></label>
       <textarea id="aj-mensaje" rows="2" placeholder="Ej.: ¡Mucho ánimo con el examen de mates! Confío en ti 💪">${esc(ls.get("repasa:mensaje") || "")}</textarea>
-      <label class="etq" for="aj-recarga">¿Has recargado saldo? Apunta cuánto ($) <span class="opc">(${IA.saldoRestante() != null ? `ahora quedan unos ${Math.max(0, IA.saldoRestante()).toFixed(2).replace(".", ",")} $` : "así le aviso cuando queden menos de 2 $"})</span></label>
-      <input id="aj-recarga" type="number" min="0" step="1" inputmode="decimal" placeholder="Ej.: 20">
+      <label class="etq" for="aj-recarga">Dinero que le dejas gastar ($) <span class="opc">(${IA.saldoRestante() != null ? `le quedan unos ${Math.max(0, IA.saldoRestante()).toFixed(2).replace(".", ",")} $; lo que escribas se suma` : "cuando le queden menos de 2 $, le aviso"})</span></label>
+      <input id="aj-recarga" type="number" min="0" step="1" inputmode="decimal" placeholder="Ej.: 15">
+      <p class="peq">Es solo un contador para avisarla: no mete ni gasta dinero de verdad. El dinero real sale de tu cuenta de Anthropic.</p>
       <label class="etq" for="aj-limite-dia">Temas nuevos al día como máximo <span class="opc">(0 = sin límite)</span></label>
       <input id="aj-limite-dia" type="number" min="0" inputmode="numeric" value="${esc(ls.get("repasa:limiteDia") ?? 0)}">
       <label class="etq" for="aj-limite-mes">Gasto máximo al mes en $ <span class="opc">(0 = sin límite)</span></label>
